@@ -245,6 +245,7 @@ PATH is mostly an issue with macOS, so this currently is setup only for macOS.
   (exec-path-from-shell-initialize))
 #+end_src
 
+** The =init.el= section with basic settings
 
 Basic settings, these I had before. Somehow this fixes the box color of
 org code blocks?. Need to find a good spot for them. Winner-mode allows
@@ -256,6 +257,9 @@ select-enable-clipboard should allow me to use the system clipboard.
 indent-tabs-mode, if non-nil, indentation can insert tabs.
 
 #+begin_src emacs-lisp :tangle "init.el"
+
+;; Prefer lexical binding by default
+(set-default-toplevel-value 'lexical-binding t)
 (winner-mode 1)
 (set-default-coding-systems 'utf-8)
 
@@ -1061,7 +1065,7 @@ to add a context indication in the modeline. I can replace this
 
 #+end_src
 
-** The =init.el= adding a function to toggle frame width
+** The =setup-frame.el= adding a function to toggle frame width
 
 This function is to toggle the width from 'half' to 'wide', it now only
 works on mac. I should make it so it changes the width based on the
@@ -1071,7 +1075,12 @@ This function should be improved. I think I should a wide and narrow
 setup. Where toggling to narrow deleted all other windows. Also,
 olivetti mode should be active for org buffers when in wide mode only.
 
-#+begin_src emacs-lisp :tangle "init.el"
+Improved  function:
+
+#+begin_src emacs-lisp :tangle "steven/setup-frame.el"
+;;; -*- lexical-binding: t -*-
+
+;;;###autoload
 (defun steven-frame-recenter (&optional frame)
   "Center FRAME on the screen.
 FRAME can be a frame name, a terminal name, or a frame.
@@ -1081,13 +1090,7 @@ If FRAME is omitted or nil, use currently selected frame."
     (modify-frame-parameters
      frame '((user-position . t) (top . 0.5) (left . 0.5)))))
 
-;; Hook into startup
-;(add-hook 'window-setup-hook #'center-frame)
-#+end_src
-
-Improved  function:
-
-#+begin_src emacs-lisp :tangle "init.el"
+;;;###autoload
 (defun steven-toggle-frame-width ()
   "Toggle between maximized and a fixed pixel-sized frame."
   (interactive)
@@ -1113,8 +1116,8 @@ Improved  function:
         (set-frame-parameter frame 'fullscreen 'maximized)
         (message "Switched to MAXIMIZED mode")))))
 
-
-
+(provide 'setup-frame)
+;;setup-frame.el end here
 #+end_src
 
 ** The =init.el= section on the toggle map
@@ -1609,8 +1612,6 @@ Working on a minor mode: semlf mode
   :ensure nil
   :hook (after-init . delete-selection-mode))
 
-;; Prefer lexical binding by default
-(set-default-toplevel-value 'lexical-binding t)
 #+end_src
 
 ** The =init.el= section to setup goto-chg
@@ -1805,12 +1806,14 @@ Dired subtree is to show subtrees of folder with TAB
 
 #+end_src
 
-** TODO The =dired-extras.el= section defining custom dired functions
+** The =dired-extras.el= section defining custom dired functions
 
 This part is copied from the config of Prot, this can be used to limit
 Dired to a regexp query. Sometimes usefull.
 
-#+begin_src emacs-lisp :tangle "init.el"
+#+begin_src emacs-lisp :tangle "steven/dired-extras.el"
+;;; -*- lexical-binding: t -*-
+
 (defvar steven-dired--limit-hist '()
   "Minibuffer history for `prot-dired-limit-regexp'.")
 
@@ -1835,6 +1838,9 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   (unless omit (dired-toggle-marks))
   (dired-do-kill-lines)
   (add-to-history 'steven-dired--limit-hist regexp))
+
+(provide 'dired-extras)
+;;dired-extras.el end here
 #+end_src
 
 Custom function to pop dired in left pane at default directory of
@@ -1953,38 +1959,12 @@ I am  with some tools:
 - define-word
 - wiktionary-bro
 
-
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package wiktionary-bro
   :ensure t)
 
 (use-package define-word
   :ensure t)
-
-(use-package gt 
-  :ensure t
-  :config
-  (setq gt-langs '(nl en pt))
-  ;; English -> Dutch
-  (setq gt-preset-translators
-      `((ts-1 . ,(gt-translator
-                  :taker (gt-taker :langs '(en nl) :text 'word)
-                  :engines (gt-google-engine)
-                  :render (gt-buffer-render)))
-        (ts-2 . ,(gt-translator
-                  :taker (gt-taker :langs '(nl en) :text 'word)
-                  :engines (gt-google-engine)
-                  :render (gt-buffer-render)))
-        (ts-3 . ,(gt-translator
-                  :taker (gt-taker :langs '(en pt) :text 'word)
-                  :engines (gt-google-engine)
-                  :render (gt-buffer-render)))))
-  (setq gt-default-translator
-        (gt-translator
-                  :taker (gt-taker :langs '(nl en) :text 'word)
-                  :engines (gt-google-engine)
-                  :render (gt-buffer-render))))
-
 #+end_src
 
 ** The =init.el= section to setup spell-checking
@@ -2176,7 +2156,30 @@ with prot-pair]].
 
 #+end_src
 
-** The =init.el= section on the  setup of org-mode
+** The =init.el= section on the setup of markdown-moden
+
+From the setup of oantolin
+
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package markdown-mode
+  :ensure t
+  :bind
+  (:map markdown-mode-map
+        ("C-c m" . markdown-mode-style-map))
+  :hook
+  (markdown-mode . turn-on-visual-line-mode)
+  :custom
+  (markdown-hide-markup t)
+  :custom-face
+  (markdown-metadata-key-face ((t (:inherit default))))
+  (markdown-metadata-value-face
+   ((t (:inherit default :foreground unspecified)))))
+  ;:config
+  ;(fset 'markdown-mode-style-map markdown-mode-style-map)
+  ;(modify-syntax-entry ?\" "\"" markdown-mode-syntax-table))
+#+end_src
+
+** The =init.el= section on the setup of org-mode
 
 *** The =init.el= main setup of org
 
@@ -2407,12 +2410,6 @@ Main capture templates. The main idea is:
                 :empty-lines-after 1))))
 #+end_src
 
-*** The =init.el= section with consult-templates
-
-#+begin_src emacs-lisp :tangle "init.el"
-
-#+end_src
-
 *** The =init.el= setup of org-babel
 Load languages for source blocks and dont ask for confirmation to run
 #+begin_src emacs-lisp :tangle "init.el"
@@ -2437,6 +2434,32 @@ Load languages for source blocks and dont ask for confirmation to run
   :after org
   :bind (:map org-mode-map
          ("C-c l" . org-cliplink)))
+#+end_src
+
+*** The =init.el= section with consult-templates
+
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package consult-template
+  :vc (:url "https://github.com/StevenFolkersma/consult-template.git" :rev :newest)
+  :demand t
+  :custom
+  ;; Where templates are persisted. Defaults to templates.el in
+  ;; user-emacs-directory. Set this before the package loads.
+  (consult-templates-file "~/.config/emacs/my-templates.el")
+  :bind
+  ("C-c i i" . consult-template-insert)
+  ("C-c i d" . consult-template-define))
+#+end_src
+
+** The =init.el= section on placeholder
+
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package placeholder
+  :vc (:url "https://github.com/oantolin/placeholder.git")
+  :bind
+  ("M-_" . placeholder-insert)
+  ("C-S-n" . placeholder-forward)
+  ("C-S-p" . placeholder-backward))
 #+end_src
 
 ** The =init.el= settings on org-export
@@ -2787,11 +2810,14 @@ The package is loaded directly from the git repo, which can be upgraded with /pa
 #+end_src 
 
 
-** TODO The =denote-extras.el= section on custom denote functions
+** The =denote-extras.el= section on custom denote functions
 
 Not tangled yet, need to check dependency on denote
 
-#+begin_src emacs-lisp :tangle "init.el"
+#+begin_src emacs-lisp :tangle "steven/steven-denote-extras.el"
+;;; -*- lexical-binding: t -*-
+
+;;;###autoload
 (defun steven-denote-create-note-in-any-directory ()
   "Create new Denote note in any directory.
 Prompt for the directory using minibuffer completion."
@@ -2800,6 +2826,7 @@ Prompt for the directory using minibuffer completion."
   (let ((denote-directory (read-directory-name "New note in: " nil nil :must-match)))
     (call-interactively 'denote)))
 
+;;;###autoload
 (defun steven-denote-notes ()
   "Like `denote' but always use the ~/Documents/Notes/ directory."
   (interactive)
@@ -2807,6 +2834,7 @@ Prompt for the directory using minibuffer completion."
         (denote-use-prompts '(title keywords)))
     (call-interactively 'denote)))
 
+;;;###autoload
 (defun steven-denote-wiki ()
   "Like `denote' but always use the ~/Documents/Wiki/ directory."
   (interactive)
@@ -2814,6 +2842,7 @@ Prompt for the directory using minibuffer completion."
         (denote-use-prompts '(title keywords)))
     (call-interactively 'denote)))
 
+;;;###autoload
 (defun steven-insert-relative-link ()
   "Use `denote-find` to select a Denote file, then insert a relative Org
 link without a description."
@@ -2821,6 +2850,9 @@ link without a description."
   (let* ((file (denote-file-prompt))
          (relative (file-relative-name file default-directory)))
     (insert (format "[[file:%s]]" relative))))
+
+(provide 'denote-extras)
+;;steven-denote-extras ends here
 #+end_src
 
 ** The =init.el= section on denote-consult
@@ -2951,11 +2983,6 @@ Page ]]
 (with-eval-after-load 'org
   (define-key org-mode-map (kbd "C-'") nil))
 #+end_src
-
-I am not sure how to require stuff should work yet.
-Ideally you only load it when the function is called.
-However, any require call inside a personal .el module will also be triggered, which can cause unwanted loading of function/packages.
-Prot-pair does not have any require call, so it can be safely made here.
 
 Autoloads (i.e. lazy loading) can be set up like this:
 #+begin_src emacs-lisp

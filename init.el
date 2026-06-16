@@ -37,6 +37,8 @@
 (when (memq window-system '(mac ns))
   (exec-path-from-shell-initialize))
 
+;; Prefer lexical binding by default
+(set-default-toplevel-value 'lexical-binding t)
 (winner-mode 1)
 (set-default-coding-systems 'utf-8)
 
@@ -669,43 +671,6 @@ Can be either 'default or 'minimal.")
   (put 'visual-line-mode 'safe-local-variable #'booleanp)
   (put 'auto-fill-mode 'safe-local-variable #'booleanp))
 
-(defun steven-frame-recenter (&optional frame)
-  "Center FRAME on the screen.
-FRAME can be a frame name, a terminal name, or a frame.
-If FRAME is omitted or nil, use currently selected frame."
-  (interactive)
-  (unless (eq 'maximised (frame-parameter nil 'fullscreen))
-    (modify-frame-parameters
-     frame '((user-position . t) (top . 0.5) (left . 0.5)))))
-
-;; Hook into startup
-;(add-hook 'window-setup-hook #'center-frame)
-
-(defun steven-toggle-frame-width ()
-  "Toggle between maximized and a fixed pixel-sized frame."
-  (interactive)
-  (let* ((frame (selected-frame))
-         (width 800)
-         (height 800)
-         (is-maximized
-          (eq (frame-parameter frame 'fullscreen) 'maximized)))
-
-    (if is-maximized
-        ;; Switch to fixed pixel size
-        (progn
-          (set-frame-parameter frame 'fullscreen nil)
-
-          ;; t => pixelwise
-          (set-frame-size frame width height t)
-
-          (delete-other-windows)
-          (message "Switched to %dx%d pixels" width height))
-
-      ;; Switch to maximized
-      (progn
-        (set-frame-parameter frame 'fullscreen 'maximized)
-        (message "Switched to MAXIMIZED mode")))))
-
 (bind-keys :prefix-map toggle-map
            :prefix "C-c t"
            :prefix-docstring "Keymap for commands that toggle settings."
@@ -997,9 +962,6 @@ This command does the inverse of `fill-paragraph'"
   :ensure nil
   :hook (after-init . delete-selection-mode))
 
-;; Prefer lexical binding by default
-(set-default-toplevel-value 'lexical-binding t)
-
 (use-package goto-chg
   :ensure t
   :bind (("C-(" . goto-last-change)
@@ -1135,31 +1097,6 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
                   "epub"
                   "\\)")))
 
-(defvar steven-dired--limit-hist '()
-  "Minibuffer history for `prot-dired-limit-regexp'.")
-
-;;;###autoload
-(defun steven-dired-limit-regexp (regexp omit)
-  "Limit Dired to keep files matching REGEXP.
-
-With optional OMIT argument as a prefix (\\[universal-argument]),
-exclude files matching REGEXP.
-
-Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
-  (interactive
-   (list
-    (read-regexp
-     (concat "Files "
-             (when current-prefix-arg
-               (propertize "NOT " 'face 'warning))
-             "matching PATTERN: ")
-     nil 'steven-dired--limit-hist)
-    current-prefix-arg))
-  (dired-mark-files-regexp regexp)
-  (unless omit (dired-toggle-marks))
-  (dired-do-kill-lines)
-  (add-to-history 'steven-dired--limit-hist regexp))
-
 (defun steven-dired-here-side-left ()
   "Open Dired for current buffer's directory in a left side window."
   (interactive)
@@ -1239,30 +1176,6 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
 
 (use-package define-word
   :ensure t)
-
-(use-package gt 
-  :ensure t
-  :config
-  (setq gt-langs '(nl en pt))
-  ;; English -> Dutch
-  (setq gt-preset-translators
-      `((ts-1 . ,(gt-translator
-                  :taker (gt-taker :langs '(en nl) :text 'word)
-                  :engines (gt-google-engine)
-                  :render (gt-buffer-render)))
-        (ts-2 . ,(gt-translator
-                  :taker (gt-taker :langs '(nl en) :text 'word)
-                  :engines (gt-google-engine)
-                  :render (gt-buffer-render)))
-        (ts-3 . ,(gt-translator
-                  :taker (gt-taker :langs '(en pt) :text 'word)
-                  :engines (gt-google-engine)
-                  :render (gt-buffer-render)))))
-  (setq gt-default-translator
-        (gt-translator
-                  :taker (gt-taker :langs '(nl en) :text 'word)
-                  :engines (gt-google-engine)
-                  :render (gt-buffer-render))))
 
 ;; Use Hunspell as the spell-checker
 (when (executable-find "hunspell")
@@ -1353,6 +1266,23 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   (electric-indent-mode -1)
   (electric-pair-mode 1)
   (electric-quote-mode 1)
+
+(use-package markdown-mode
+  :ensure t
+  :bind
+  (:map markdown-mode-map
+        ("C-c m" . markdown-mode-style-map))
+  :hook
+  (markdown-mode . turn-on-visual-line-mode)
+  :custom
+  (markdown-hide-markup t)
+  :custom-face
+  (markdown-metadata-key-face ((t (:inherit default))))
+  (markdown-metadata-value-face
+   ((t (:inherit default :foreground unspecified)))))
+  ;:config
+  ;(fset 'markdown-mode-style-map markdown-mode-style-map)
+  ;(modify-syntax-entry ?\" "\"" markdown-mode-syntax-table))
 
       ;;; Org-mode (personal information manager)
 (use-package org
@@ -1536,8 +1466,6 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
                          "%i\n%?\n")
                 :empty-lines-after 1))))
 
-
-
 (org-babel-do-load-languages
     'org-babel-load-languages
     '((emacs-lisp . t)
@@ -1554,6 +1482,24 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   :after org
   :bind (:map org-mode-map
          ("C-c l" . org-cliplink)))
+
+(use-package consult-template
+  :vc (:url "https://github.com/StevenFolkersma/consult-template.git" :rev :newest)
+  :demand t
+  :custom
+  ;; Where templates are persisted. Defaults to templates.el in
+  ;; user-emacs-directory. Set this before the package loads.
+  (consult-templates-file "~/.config/emacs/my-templates.el")
+  :bind
+  ("C-c i i" . consult-template-insert)
+  ("C-c i d" . consult-template-define))
+
+(use-package placeholder
+  :vc (:url "https://github.com/oantolin/placeholder.git")
+  :bind
+  ("M-_" . placeholder-insert)
+  ("C-S-n" . placeholder-forward)
+  ("C-S-p" . placeholder-backward))
 
 (setq org-export-directory "Exports")
 
@@ -1795,36 +1741,6 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
     (denote-rename-buffer-mode 1))
 
 (require 'denote)
-
-(defun steven-denote-create-note-in-any-directory ()
-  "Create new Denote note in any directory.
-Prompt for the directory using minibuffer completion."
-  (declare (interactive-only t))
-  (interactive)
-  (let ((denote-directory (read-directory-name "New note in: " nil nil :must-match)))
-    (call-interactively 'denote)))
-
-(defun steven-denote-notes ()
-  "Like `denote' but always use the ~/Documents/Notes/ directory."
-  (interactive)
-  (let ((denote-use-directory "~/Documents/Notes")
-        (denote-use-prompts '(title keywords)))
-    (call-interactively 'denote)))
-
-(defun steven-denote-wiki ()
-  "Like `denote' but always use the ~/Documents/Wiki/ directory."
-  (interactive)
-  (let ((denote-directory "~/Documents/Wiki")
-        (denote-use-prompts '(title keywords)))
-    (call-interactively 'denote)))
-
-(defun steven-insert-relative-link ()
-  "Use `denote-find` to select a Denote file, then insert a relative Org
-link without a description."
-  (interactive)
-  (let* ((file (denote-file-prompt))
-         (relative (file-relative-name file default-directory)))
-    (insert (format "[[file:%s]]" relative))))
 
 (use-package consult-denote
   :ensure t
