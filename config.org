@@ -1071,11 +1071,10 @@ This function is to toggle the width from 'half' to 'wide', it now only
 works on mac. I should make it so it changes the width based on the
 display size.
 
-This function should be improved. I think I should a wide and narrow
-setup. Where toggling to narrow deleted all other windows. Also,
-olivetti mode should be active for org buffers when in wide mode only.
-
-Improved  function:
+#+begin_src emacs-lisp :tangle "init.el"
+;;loading the .el file
+(use-package setup-frame)
+#+end_src
 
 #+begin_src emacs-lisp :tangle "steven/setup-frame.el"
 ;;; -*- lexical-binding: t -*-
@@ -1190,120 +1189,8 @@ Adds nerd icons to dired list
 #+end_src
 
 ** The =steven-scratch.el= section for running a scratch buffer of any mode
-
-#+begin_src emacs-lisp :tangle "init.el"
-(require 'steven-scratch)
-#+end_src
-
-Fully copied from [[https://protesilaos.com/emacs/dotemacs#h:efebaec4-7273-4c5a-a4c4-9f99df0e46bb][GNU Emacs configuration | Protesilaos]]
-
-#+begin_src emacs-lisp :tangle "steven/steven-scratch.el"
-;;; -*- lexical-binding: t -*-
-
-(defgroup prot-scratch ()
-  "Scratch buffers for editable major mode of choice."
-  :group 'editing)
-
-(defcustom prot-scratch-default-mode 'org-mode
-  "Default major mode for `prot-scratch-scratch-buffer'."
-  :type 'symbol
-  :group 'prot-scratch)
-
-(defun prot-scratch--scratch-list-modes ()
-  "List known major modes."
-  (let (symbols)
-    (mapatoms
-     (lambda (symbol)
-       (when (and (functionp symbol)
-                  (or (provided-mode-derived-p symbol 'text-mode)
-                      (provided-mode-derived-p symbol 'prog-mode)))
-         (push symbol symbols))))
-    symbols))
-
-(defun prot-common-empty-buffer-p ()
-  "Test whether the buffer is empty."
-  (or (= (point-min) (point-max))
-      (save-excursion
-        (goto-char (point-min))
-        (while (and (looking-at "^\\([a-zA-Z]+: ?\\)?$")
-                    (zerop (forward-line 1))))
-        (eobp))))
-
-(defun prot-scratch--insert-comment ()
-  "Insert comment for major mode, if appropriate.
-Insert a comment if `comment-start' is non-nil and the buffer is
-empty."
-  (when (and (prot-common-empty-buffer-p) comment-start)
-    (insert (format "Scratch buffer for: %s\n\n" major-mode))
-    (goto-char (point-min))
-    (comment-region (line-beginning-position) (line-end-position))))
-
-(defun prot-scratch--prepare-buffer (region &optional mode)
-  "Add contents to scratch buffer and name it accordingly.
-
-REGION is added to the contents to the new buffer.
-
-Use the current buffer's major mode by default.
-With optional MODE use that major mode instead."
-  (let ((major (or mode major-mode)))
-    (with-current-buffer (pop-to-buffer (format "*%s scratch*" major))
-      (funcall major)
-      (prot-scratch--insert-comment)
-      (goto-char (point-max))
-      (unless (string-empty-p region)
-        (when (prot-common-line-regexp-p 'non-empty)
-          (insert "\n\n"))
-        (insert region)))))
-
-(defvar prot-scratch--major-mode-history nil
-  "Minibuffer history of `prot-scratch--major-mode-prompt'.")
-
-;;;###autoload
-(defun prot-scratch--major-mode-prompt ()
-  "Prompt for major mode and return the choice as a symbol."
-  (intern
-   (completing-read "Select major mode: "
-                    (prot-scratch--scratch-list-modes)
-                    nil
-                    :require-match
-                    nil
-                    'prot-scratch--major-mode-history)))
-
-(defun prot-scratch--capture-region ()
-  "Capture active region, else return empty string."
-  (if (region-active-p)
-      (buffer-substring-no-properties (region-beginning) (region-end))
-    ""))
-
-;;;###autoload
-(defun prot-scratch-buffer (&optional arg)
-  "Produce a scratch buffer matching the current major mode.
-
-With optional ARG as a prefix argument (\\[universal-argument]), use
-`prot-scratch-default-mode'.
-
-With ARG as a double prefix argument, prompt for a major mode with
-completion.
-Candidates are derivatives of `text-mode' or `prog-mode'.
-
-If region is active, copy its contents to the new scratch buffer.
-
-Buffers are named as *MAJOR-MODE scratch*.
-If one already exists for the given MAJOR-MODE, any text is appended to
-it."
-  (interactive "P")
-  (let ((region (prot-scratch--capture-region)))
-    (pcase (prefix-numeric-value arg)
-      (16 (prot-scratch--prepare-buffer region (prot-scratch--major-mode-prompt)))
-      (4 (prot-scratch--prepare-buffer region prot-scratch-default-mode))
-      (_ (prot-scratch--prepare-buffer region)))))
-
-(provide 'steven-scratch)
-;;; steven-scratch.el ends here
-#+end_src
-
 A much simpler version from karthinks:
-#+begin_src emacs-lisp :tangle "init.el"
+#+begin_src emacs-lisp :tangle "steven/steven-scratch.el"
 (use-package scratch
   :ensure t
   :config
@@ -2198,110 +2085,6 @@ Org refiling is set like this, so I see the full path of the outline. To deal wi
       2))) (setq org-refile-use-outline-path 'file) (setq org-outline-path-complete-in-steps nil)
 #+end_src
 
-
-#+begin_src emacs-lisp :tangle "init.el"
-      ;;; Org-mode (personal information manager)
-(use-package org
-    :ensure nil
-    ;;:init
-    ;;(add-to-list 'safe-local-variable-values '(org-hide-leading-stars . t))
-    ;;(add-to-list 'safe-local-variable-values '(org-hide-macro-markers . t))
-    :bind
-    ( :map global-map
-      ("C-c l" . org-store-link)
-      ("C-c a" . org-agenda)
-      ("C-c o" . org-open-at-point-global)
-      :map org-mode-map
-      ;; I don't like that Org binds one zillion keys, so if I want one
-      ;; for something more important, I disable it from here.
-      ("C-c M-l" . org-insert-last-stored-link)
-      ("C-c C-M-l" . org-toggle-link-display)
-      ("M-." . org-edit-special) ; alias for C-c ' (mnenomic is global M-. that goes to source)
-      :map org-src-mode-map
-      ("M-," . org-edit-src-exit) ; see M-. above
-      :map narrow-map
-      ("b" . org-narrow-to-block)
-      ("e" . org-narrow-to-element)
-      ("s" . org-narrow-to-subtree))
-    :config
-    (setq org-directory (expand-file-name "~/Documents/Org/"))
-    (setq org-agenda-files (list "agenda.org" "inbox.org" "projects.org" "personal.org" "readinglist.org")) 
-    (setq org-agenda-skip-scheduled-if-done t)
-    (setq org-imenu-depth 7)
-    (setq org-refile-targets '(("agenda.org" :maxlevel . 1)
-      ("personal.org" :maxlevel . 1)
-      ("readinglist.org" :maxlevel . 1)
-      ("projects.org" :maxlevel . 2)))
-    (setq org-refile-use-outline-path 'file)
-    (setq org-outline-path-complete-in-steps nil)
-    (setq org-hide-emphasis-markers nil)
-    (setq org-hide-leading-stars nil)
-    (setq org-ellipsis "")
-    (setq org-cycle-separator-lines 1) ;;number of seperator lines between collapsed headings
-    (setq org-structure-template-alist
-  	'(("s" . "src")
-  	  ("e" . "src emacs-lisp")
-  	  ("E" . "src emacs-lisp :results value code :lexical t")
-  	  ("t" . "src emacs-lisp :tangle FILENAME")
-  	  ("b" . "src bash")
-  	  ("x" . "comment")
-          ("n" . "note")
-  	  ("q" . "quote")))
-    (setq org-fold-catch-invisible-edits 'show) ;; what happens when you edit in a folded block
-    (setq org-loop-over-headlines-in-active-region 'start-level)
-    (setq org-modules '(ol-info ol-eww))
-    (setq org-startup-with-inline-images t)
-    (setq org-insert-heading-respect-content t)
-    ;;(setq org-highlight-latex-and-related nil) ; other options affect elisp regexp in src blocks
-    (setq org-fontify-quote-and-verse-blocks t)
-    (setq org-fontify-whole-block-delimiter-line t)
-    (setq org-fontify-done-headline nil)
-    (setq org-priority-faces nil)
-    (setq org-log-done 'time)
-    (setq org-table-convert-region-max-lines 20000)
-    (setq org-todo-keywords        ; This overwrites the default Doom org-todo-keywords
-  	'((sequence
-  	   "TODO(t)"           ; A task that is ready to be tackled
-  	   "NEXT(n)"           ; An idea, not urgent
-  	   "HOLD(h)"            ; To read, not urgent
-  	   "|"                 ; needed for separation
-  	   "DONE(d)"           ; Task has been completed
-  	   "ARCHIVED(a)" )))
-    (setq org-link-frame-setup
-      '((file . find-file)))
-    (setq org-agenda-custom-commands
-      '(("g" "Get Things Done (GTD)"
-         ((agenda ""
-                  ((org-agenda-skip-function
-                    '(org-agenda-skip-entry-if 'deadline))
-                   (org-deadline-warning-days 0)))
-
-          (todo "NEXT"
-                ((org-agenda-skip-function
-                  '(org-agenda-skip-entry-if 'deadline))
-                 (org-agenda-prefix-format "  %i %-12:c [%e] ")
-                 (org-agenda-overriding-header "\nTasks\n")))
-
-
-          (tags-todo "planning"
-                     ((org-agenda-prefix-format "  %?-12t% s")
-                      (org-agenda-overriding-header "\nPlanning\n")))
-          (agenda nil
-                  ((org-agenda-entry-types '(:deadline))
-                   (org-agenda-format-date "")
-                   (org-deadline-warning-days 7)
-                   (org-agenda-skip-function
-                    '(org-agenda-skip-entry-if 'notregexp "\\* NEXT"))
-                   (org-agenda-overriding-header "\nDeadlines")))
-
-          (tags-todo "inbox"
-                     ((org-agenda-prefix-format "  %?-12t% s")
-                      (org-agenda-overriding-header "\nInbox\n")))
-
-          )))))
-
-#+end_src
-
 *** The =init.el= section with custom org functions
 
 #+begin_src emacs-lisp :tangle "init.el"
@@ -2812,6 +2595,10 @@ The package is loaded directly from the git repo, which can be upgraded with /pa
 
 ** The =denote-extras.el= section on custom denote functions
 
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package steven-denote-extras)
+#+end_src
+
 Not tangled yet, need to check dependency on denote
 
 #+begin_src emacs-lisp :tangle "steven/steven-denote-extras.el"
@@ -2851,8 +2638,8 @@ link without a description."
          (relative (file-relative-name file default-directory)))
     (insert (format "[[file:%s]]" relative))))
 
-(provide 'denote-extras)
-;;steven-denote-extras ends here
+(provide 'steven-denote-extras)
+;;steven-denote-extras.el ends here
 #+end_src
 
 ** The =init.el= section on denote-consult
@@ -2981,7 +2768,7 @@ Page ]]
 (require 'prot-pair)
 
 (with-eval-after-load 'org
-  (define-key org-mode-map (kbd "C-'") nil))
+  (define-key org-mode-map (kbd "C-c p") nil))
 #+end_src
 
 Autoloads (i.e. lazy loading) can be set up like this:
@@ -3170,7 +2957,7 @@ controlled by `delete-pair-blink-delay'."
 
 #+end_src
 
-** The =init.el= section to setup completion with vertico
+[[*The =early-init.el= initialises the package cache][The =early-init.el= initialises the package cache]] ** The =init.el= section to setup completion with vertico
 Configure the minibuffer and completions.
 - vertico-cycle: So I can go from bottom item to top item by down arrow or C-n
 - vertico-resize nil: always keep the same size.
@@ -3326,6 +3113,8 @@ I need to check how the :bind setup works, it might load the libraries not how I
   :bind
   ("C-." . embark-act)
   ("C-;" . embark-dwim)
+  (:map embark-general-map
+        ("x" . steven-gptel-prompt-and-respond))
   (:map minibuffer-local-map
         ("C-c C-c" . embark-collect)
         ("C-c C-e" . embark-export)
@@ -3351,7 +3140,8 @@ I need to check how the :bind setup works, it might load the libraries not how I
         ("e" . steven-gptel-lookup)) ;etmology search with gptel
   (:map embark-region-map
         ("m" . center-region) ; m for middle
-        ("=" . quick-calc))
+        ("=" . quick-calc)
+        ("x" . steven-gptel-prompt-and-respond))
   (:map embark-file-map
         ("y" . steven-insert-relative-link))
   (:map embark-heading-map
@@ -3364,7 +3154,7 @@ I need to check how the :bind setup works, it might load the libraries not how I
                        embark-isearch-highlight-indicator))
   (embark-cycle-key ".")
   (embark-keymap-prompter-key "`")
-  (embark-help-key "C-h")
+  (embark-help-key "`")
   :config
   (setq embark-quit-after-action
         '((kill-buffer . nil)
@@ -3468,19 +3258,22 @@ I need to check how the :bind setup works, it might load the libraries not how I
   (avy-background t))             ; dim background during selection
 #+end_src
 
-** The =init.el= section on CAPE
+** The =init.el= section on completions and CAPE
 
 Something I want to try:
-#+begin_src emacs-lisp
+#+begin_src emacs-lisp :tangle "init.el"
 (use-package cape
   :ensure t
-  :bind ("C-[" . cape-prefix-map)
+  :bind ("C-c P" . cape-prefix-map)
   :init
   (add-hook 'completion-at-point-functions #'cape-dabbrev)
   (add-hook 'completion-at-point-functions #'cape-file)
   (add-hook 'completion-at-point-functions #'cape-elisp-block))
 
+;this is interfering with prot-pair, need to find another one
+(global-set-key (kbd "C-'") #'completion-at-point)
 #+end_src
+
 
 ** The =init.el= section with corfu setup
 
@@ -3598,11 +3391,8 @@ If you customize 'shr-fill-text' to nil, EWW will now automatically turn on 'vis
 
   ;; Persist configurations between Emacs sessions.
   ;; Also apply the :cursor-color again when swithcing to another theme.
-  (cursory-mode 1)
-  :bind
-  ;; We have to use the "point" mnemonic, because C-c c is often the
-  ;; suggested binding for `org-capture' and is the one I use as well.
-  ("C-c p" . cursory-set-preset))
+  (cursory-mode 1))
+
 #+end_src
 
 ** The =init.el= section to setup logos (focus mode)
@@ -4360,17 +4150,25 @@ better with Linux.
                      mistral-large-latest))))
 
     (setq gptel-backends (list openai claude mistral))
-
+    
     (setq steven-gptel-profiles
-          `(("openai"
-             :backend ,openai
-             :model gpt-5.4)
-            ("Claude"
-             :backend ,claude
-             :model claude-sonnet-4-6)
-            ("Mistral"
-             :backend ,mistral
-             :model mistral-large-latest)))))
+      `(("openai"
+         :backend ,openai
+         :model gpt-5.4)
+        ("openai-mini"
+         :backend ,openai
+         :model gpt-5.4-mini)
+        ("claude-sonnet"
+         :backend ,claude
+         :model claude-sonnet-4-6)
+        ("claude-haiku"
+         :backend ,claude
+         :model claude-haiku-4-5-20251001)
+        ("mistral"
+         :backend ,mistral
+         :model mistral-large-latest)))))
+  (steven-init-gptel)
+  (setq gptel-backend `openai-mini)
   (setq gptel-stream t))
 
 (use-package gptel-agent
@@ -4382,19 +4180,17 @@ better with Linux.
   :after gptel
   :config
   (define-key global-gptel-map
-              (kbd "w")
+              (kbd "b")
               #'steven-gptel-switch-backend)
   (define-key global-gptel-map
-              (kbd "d")
+              (kbd "w")
               #'steven-gptel-lookup)
   (define-key global-gptel-map
               (kbd "p")
               #'steven-gptel-prompt-and-respond))
 
-
 #+end_src
-
-
+word
 ** The =gtpel-extras.el= section for gptel extras
 This is a way to pop a custom buffer via a function, via [[https://github.com/karthink/gptel/wiki/Defining-custom-gptel-commands][Defining custom
 gptel commands · karthink/gptel Wiki · GitHub]].

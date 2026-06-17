@@ -34,5 +34,5 @@ link without a description."
          (relative (file-relative-name file default-directory)))
     (insert (format "[[file:%s]]" relative))))
 
-(provide 'denote-extras)
-;;steven-denote-extras ends here
+(provide 'steven-denote-extras)
+;;steven-denote-extras.el ends here

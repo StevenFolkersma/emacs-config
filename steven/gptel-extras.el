@@ -58,61 +58,80 @@
    (list
     (or (thing-at-point 'word t)
         (read-string "Word: " nil gptel-lookup--history))))
-
   (when (string= word "") (user-error "A word is required."))
+  (let* ((profile (cdr (assoc "Mistral" steven-gptel-profiles)))
+         (backend (plist-get profile :backend))
+         (model   (plist-get profile :model))
+         (prompt-file (if (eq steven--current-language 'dutch)
+                          "~/.config/emacs/prompts/word-etmologist-nl.txt"
+                        "~/.config/emacs/prompts/word-etmologist-en.txt")))
+    (gptel-request
+     word
+     :backend ,mistral
+     :model   mistral-large-latest
+     :system  (steven--gptel-read-prompt (expand-file-name prompt-file))
+     :callback
+     (lambda (response info)
+       (if (not response)
+           (message "gptel-lookup failed with message: %s" (plist-get info :status))
+         (with-current-buffer (get-buffer-create "*Word Definition*")
+           (let ((inhibit-read-only t))
+             (erase-buffer)
+             (insert response)
+             (goto-char (point-min))
+             (org-mode)
+             (visual-line-mode)
+             (read-only-mode 1))
+           (display-buffer
+            (current-buffer)
+            '((display-buffer-in-side-window)
+              (side . right)
+              (window-width . 0.5)
+              (slot . 0)))))))))
 
-  (gptel-request
-   word
-   :system (steven--gptel-read-prompt
-            (expand-file-name "~/.config/emacs/prompts/word-etmologist-en.txt"))
-   :callback
-   (lambda (response info)
-     (if (not response)
-         (message "gptel-lookup failed with message: %s"
-                  (plist-get info :status))
-       (with-current-buffer (get-buffer-create "*Word Definition*")
-         (let ((inhibit-read-only t))
-           (erase-buffer)
-           (insert response)
-           (goto-char (point-min))
-           (org-mode)
-           (visual-line-mode)
-           (read-only-mode 1))
-
-       (display-buffer
-                 (current-buffer)
-                 `((display-buffer-in-side-window)
-                   (side . right)
-                   (window-width . 0.5)
-                   (slot . 0))))))))
-
-;;;###autoload 
-(defun steven-gptel-prompt-and-respond ()
-  "Prompt for an instruction, optionally include the active region,
-   open an Org scratch buffer for the response, and set the directive
-   based on the current major mode."
-  (interactive)
-  (let ((instruction (read-string "Instruction: "))
-        (region-text (when (use-region-p)
-                       (buffer-substring-no-properties (region-beginning) (region-end))))
-        (directive (if (derived-mode-p 'text-mode)
-                       "default-writing-short"
-                     "default-emacs-short"))
-        (response-buffer (get-buffer-create "*GPTel Response*")))
-
-    ;; Prepare the prompt with the instruction and optional region
-    (let ((prompt (if region-text
-                      (format "Instruction: %s\n\nSelected text:\n%s" instruction region-text)
-                    instruction)))
-
-      ;; Insert the prompt into the response buffer with appropriate directive
-      (with-current-buffer response-buffer
-        (org-mode)
-        (erase-buffer)
-        (insert (format "#+BEGIN_SRC :directive %s\n%s\n#+END_SRC\n\n" directive prompt))
-        (goto-char (point-max))
-        (insert "# Response will appear below:\n\n")
-        (display-buffer response-buffer)))))
+;;;###autoload
+(defun steven-gptel-prompt-and-respond (region-text instruction)
+  "Send REGION-TEXT with INSTRUCTION to gptel and display the response.
+REGION-TEXT is captured first so Embark can supply it as the target."
+  (interactive
+   (list
+    (if (use-region-p)
+        (prog1 (buffer-substring-no-properties (region-beginning) (region-end))
+          (deactivate-mark))
+      "")
+    (read-string "Instruction: ")))
+  (let* ((system-prompt (alist-get
+                         (if (derived-mode-p 'text-mode)
+                             'default-writing-short
+                           'default-emacs-short)
+                         gptel-directives))
+         (prompt (if (string-empty-p region-text)
+                     instruction
+                   (format "%s\n\n%s" instruction region-text))))
+    (gptel-request
+     prompt
+     :system system-prompt
+     :callback
+     (lambda (response info)
+       (if (not response)
+           (message "gptel-prompt-and-respond failed: %s" (plist-get info :status))
+         (with-current-buffer (get-buffer-create "*GPTel Response*")
+           (let ((inhibit-read-only t))
+             (erase-buffer)
+             (insert "* Prompt\n\n" instruction "\n")
+             (unless (string-empty-p region-text)
+               (insert "\n** Region\n\n" region-text "\n"))
+             (insert "\n* Response\n\n" response)
+             (goto-char (point-min))
+             (org-mode)
+             (visual-line-mode)
+             (read-only-mode 1))
+           (display-buffer
+            (current-buffer)
+            '((display-buffer-in-side-window)
+              (side . right)
+              (window-width . 0.5)
+              (slot . 0)))))))))
 
 (provide 'gptel-extras)
 ;;gptel-extras.el ends here

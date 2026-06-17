@@ -671,6 +671,9 @@ Can be either 'default or 'minimal.")
   (put 'visual-line-mode 'safe-local-variable #'booleanp)
   (put 'auto-fill-mode 'safe-local-variable #'booleanp))
 
+;;loading the .el file
+(use-package setup-frame)
+
 (bind-keys :prefix-map toggle-map
            :prefix "C-c t"
            :prefix-docstring "Keymap for commands that toggle settings."
@@ -713,38 +716,6 @@ Can be either 'default or 'minimal.")
 (setq initial-buffer-choice t)
 (setq initial-major-mode 'lisp-interaction-mode)
 (setq initial-scratch-message  ";; -*- lexical-binding: t; -*-\n")
-
-(require 'steven-scratch)
-
-(use-package scratch
-  :ensure t
-  :config
-  (defun my/scratch-buffer-setup ()
-    "Add contents to `scratch' buffer and name it accordingly.
-If region is active, add its contents to the new buffer."
-    (unless (derived-mode-p
-             'text-mode 'prog-mode 'conf-mode 'tex-mode)
-      (condition-case nil
-          (let ((pick
-                 (read-multiple-choice
-                  "Switch major mode?"
-                  '((?o "org") (?m "markdown")
-                    (?l "lisp-interaction") (?e "elisp")
-                    (?  "Continue")))))
-            (pcase (car pick)
-              (?o (org-mode)) (?m (markdown-mode))
-              (?l (lisp-interaction-mode)) (?e (emacs-lisp-mode)))
-            (read-only-mode 0))
-        (quit nil)))
-    (when (derived-mode-p 'emacs-lisp-mode)
-      (message "Auto-switching to `lisp-interaction-mode'")
-      (lisp-interaction-mode))
-    (let* ((mode major-mode))
-      (rename-buffer (format "*Scratch for %s*" mode) t)))
-  (setf (alist-get "\\*Scratch for" display-buffer-alist nil nil #'equal)
-        '((display-buffer-same-window)))
-  :hook (scratch-create-buffer . my/scratch-buffer-setup)
-  :bind ("C-c s" . scratch))
 
 (setq default-input-method "latin-prefix")
 (setq-default fill-column 78)
@@ -1284,106 +1255,6 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   ;(fset 'markdown-mode-style-map markdown-mode-style-map)
   ;(modify-syntax-entry ?\" "\"" markdown-mode-syntax-table))
 
-      ;;; Org-mode (personal information manager)
-(use-package org
-    :ensure nil
-    ;;:init
-    ;;(add-to-list 'safe-local-variable-values '(org-hide-leading-stars . t))
-    ;;(add-to-list 'safe-local-variable-values '(org-hide-macro-markers . t))
-    :bind
-    ( :map global-map
-      ("C-c l" . org-store-link)
-      ("C-c a" . org-agenda)
-      ("C-c o" . org-open-at-point-global)
-      :map org-mode-map
-      ;; I don't like that Org binds one zillion keys, so if I want one
-      ;; for something more important, I disable it from here.
-      ("C-c M-l" . org-insert-last-stored-link)
-      ("C-c C-M-l" . org-toggle-link-display)
-      ("M-." . org-edit-special) ; alias for C-c ' (mnenomic is global M-. that goes to source)
-      :map org-src-mode-map
-      ("M-," . org-edit-src-exit) ; see M-. above
-      :map narrow-map
-      ("b" . org-narrow-to-block)
-      ("e" . org-narrow-to-element)
-      ("s" . org-narrow-to-subtree))
-    :config
-    (setq org-directory (expand-file-name "~/Documents/Org/"))
-    (setq org-agenda-files (list "agenda.org" "inbox.org" "projects.org" "personal.org" "readinglist.org")) 
-    (setq org-agenda-skip-scheduled-if-done t)
-    (setq org-imenu-depth 7)
-    (setq org-refile-targets '(("agenda.org" :maxlevel . 1)
-      ("personal.org" :maxlevel . 1)
-      ("readinglist.org" :maxlevel . 1)
-      ("projects.org" :maxlevel . 2)))
-    (setq org-refile-use-outline-path 'file)
-    (setq org-outline-path-complete-in-steps nil)
-    (setq org-hide-emphasis-markers nil)
-    (setq org-hide-leading-stars nil)
-    (setq org-ellipsis "")
-    (setq org-cycle-separator-lines 1) ;;number of seperator lines between collapsed headings
-    (setq org-structure-template-alist
-  	'(("s" . "src")
-  	  ("e" . "src emacs-lisp")
-  	  ("E" . "src emacs-lisp :results value code :lexical t")
-  	  ("t" . "src emacs-lisp :tangle FILENAME")
-  	  ("b" . "src bash")
-  	  ("x" . "comment")
-          ("n" . "note")
-  	  ("q" . "quote")))
-    (setq org-fold-catch-invisible-edits 'show) ;; what happens when you edit in a folded block
-    (setq org-loop-over-headlines-in-active-region 'start-level)
-    (setq org-modules '(ol-info ol-eww))
-    (setq org-startup-with-inline-images t)
-    (setq org-insert-heading-respect-content t)
-    ;;(setq org-highlight-latex-and-related nil) ; other options affect elisp regexp in src blocks
-    (setq org-fontify-quote-and-verse-blocks t)
-    (setq org-fontify-whole-block-delimiter-line t)
-    (setq org-fontify-done-headline nil)
-    (setq org-priority-faces nil)
-    (setq org-log-done 'time)
-    (setq org-table-convert-region-max-lines 20000)
-    (setq org-todo-keywords        ; This overwrites the default Doom org-todo-keywords
-  	'((sequence
-  	   "TODO(t)"           ; A task that is ready to be tackled
-  	   "NEXT(n)"           ; An idea, not urgent
-  	   "HOLD(h)"            ; To read, not urgent
-  	   "|"                 ; needed for separation
-  	   "DONE(d)"           ; Task has been completed
-  	   "ARCHIVED(a)" )))
-    (setq org-link-frame-setup
-      '((file . find-file)))
-    (setq org-agenda-custom-commands
-      '(("g" "Get Things Done (GTD)"
-         ((agenda ""
-                  ((org-agenda-skip-function
-                    '(org-agenda-skip-entry-if 'deadline))
-                   (org-deadline-warning-days 0)))
-
-          (todo "NEXT"
-                ((org-agenda-skip-function
-                  '(org-agenda-skip-entry-if 'deadline))
-                 (org-agenda-prefix-format "  %i %-12:c [%e] ")
-                 (org-agenda-overriding-header "\nTasks\n")))
-
-
-          (tags-todo "planning"
-                     ((org-agenda-prefix-format "  %?-12t% s")
-                      (org-agenda-overriding-header "\nPlanning\n")))
-          (agenda nil
-                  ((org-agenda-entry-types '(:deadline))
-                   (org-agenda-format-date "")
-                   (org-deadline-warning-days 7)
-                   (org-agenda-skip-function
-                    '(org-agenda-skip-entry-if 'notregexp "\\* NEXT"))
-                   (org-agenda-overriding-header "\nDeadlines")))
-
-          (tags-todo "inbox"
-                     ((org-agenda-prefix-format "  %?-12t% s")
-                      (org-agenda-overriding-header "\nInbox\n")))
-
-          )))))
-
 (defun log-todo-next-creation-date (&rest ignore)
   "Log NEXT creation time in the property drawer under the key 'ACTIVATED'"
   (when (and (string= (org-get-todo-state) "NEXT")
@@ -1742,6 +1613,8 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
 
 (require 'denote)
 
+(use-package steven-denote-extras)
+
 (use-package consult-denote
   :ensure t
   :bind
@@ -1842,7 +1715,7 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
 (require 'prot-pair)
 
 (with-eval-after-load 'org
-  (define-key org-mode-map (kbd "C-'") nil))
+  (define-key org-mode-map (kbd "C-c p") nil))
 
 (use-package vertico
   :ensure t
@@ -1970,6 +1843,8 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   :bind
   ("C-." . embark-act)
   ("C-;" . embark-dwim)
+  (:map embark-general-map
+        ("x" . steven-gptel-prompt-and-respond))
   (:map minibuffer-local-map
         ("C-c C-c" . embark-collect)
         ("C-c C-e" . embark-export)
@@ -1995,7 +1870,8 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
         ("e" . steven-gptel-lookup)) ;etmology search with gptel
   (:map embark-region-map
         ("m" . center-region) ; m for middle
-        ("=" . quick-calc))
+        ("=" . quick-calc)
+        ("x" . steven-gptel-prompt-and-respond))
   (:map embark-file-map
         ("y" . steven-insert-relative-link))
   (:map embark-heading-map
@@ -2008,7 +1884,7 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
                        embark-isearch-highlight-indicator))
   (embark-cycle-key ".")
   (embark-keymap-prompter-key "`")
-  (embark-help-key "C-h")
+  (embark-help-key "`")
   :config
   (setq embark-quit-after-action
         '((kill-buffer . nil)
@@ -2102,6 +1978,17 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   (avy-style 'at-full)            ; show label over full target word
   (avy-background t))             ; dim background during selection
 
+(use-package cape
+  :ensure t
+  :bind ("C-c P" . cape-prefix-map)
+  :init
+  (add-hook 'completion-at-point-functions #'cape-dabbrev)
+  (add-hook 'completion-at-point-functions #'cape-file)
+  (add-hook 'completion-at-point-functions #'cape-elisp-block))
+
+;this is interfering with prot-pair, need to find another one
+(global-set-key (kbd "C-'") #'completion-at-point)
+
 (use-package shr
   :ensure nil
   :config
@@ -2174,11 +2061,7 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
 
   ;; Persist configurations between Emacs sessions.
   ;; Also apply the :cursor-color again when swithcing to another theme.
-  (cursory-mode 1)
-  :bind
-  ;; We have to use the "point" mnemonic, because C-c c is often the
-  ;; suggested binding for `org-capture' and is the one I use as well.
-  ("C-c p" . cursory-set-preset))
+  (cursory-mode 1))
 
 (use-package logos
   :ensure t
@@ -2609,17 +2492,25 @@ Otherwise rename to:
                      mistral-large-latest))))
 
     (setq gptel-backends (list openai claude mistral))
-
+    
     (setq steven-gptel-profiles
-          `(("openai"
-             :backend ,openai
-             :model gpt-5.4)
-            ("Claude"
-             :backend ,claude
-             :model claude-sonnet-4-6)
-            ("Mistral"
-             :backend ,mistral
-             :model mistral-large-latest)))))
+      `(("openai"
+         :backend ,openai
+         :model gpt-5.4)
+        ("openai-mini"
+         :backend ,openai
+         :model gpt-5.4-mini)
+        ("claude-sonnet"
+         :backend ,claude
+         :model claude-sonnet-4-6)
+        ("claude-haiku"
+         :backend ,claude
+         :model claude-haiku-4-5-20251001)
+        ("mistral"
+         :backend ,mistral
+         :model mistral-large-latest)))))
+  (steven-init-gptel)
+  (setq gptel-backend `openai-mini)
   (setq gptel-stream t))
 
 (use-package gptel-agent
@@ -2631,10 +2522,10 @@ Otherwise rename to:
   :after gptel
   :config
   (define-key global-gptel-map
-              (kbd "w")
+              (kbd "b")
               #'steven-gptel-switch-backend)
   (define-key global-gptel-map
-              (kbd "d")
+              (kbd "w")
               #'steven-gptel-lookup)
   (define-key global-gptel-map
               (kbd "p")
