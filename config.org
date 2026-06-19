@@ -278,10 +278,13 @@ indent-tabs-mode, if non-nil, indentation can insert tabs.
             "/usr/local/bin/emacsclient")))
 #+end_src
 
-** The =init.el= section to add basic keybindings
+** The =setup-basics.el= with simple conevenience commands
 
 Quality of life snipper from Prot's setup.
-#+begin_src emacs-lisp :tangle "init.el"
+#+begin_src emacs-lisp :tangle "steven/setup-basic.el"
+;;; -*- lexical-binding: t -*-
+
+;;;###autoload
 (defun steven--keyboard-quit-dwim ()
   "Do-What-I-Mean behaviour for a general `keyboard-quit'.
 
@@ -307,25 +310,7 @@ The DWIM behaviour of this command is as follows:
    (t
     (keyboard-quit))))
 
-(define-key global-map (kbd "C-g") #'steven--keyboard-quit-dwim)
-#+end_src
-
-Better C-a, from karthinks
-
-#+begin_src emacs-lisp :tangle "init.el"
-(defun back-to-indentation-or-beginning () (interactive)
-   (if (= (point) (progn (beginning-of-line-text) (point)))
-       (beginning-of-line)))
-#+end_src
-
-Some settings from the NANO config (I use prot's code for modifying C-g, which is normally also included in NANO emacs)
-
-#+begin_src emacs-lisp :tangle "init.el"
-(use-package bind-key
-  :bind (:map help-map ("y" . describe-personal-keybindings)))
-
-(global-set-key "\C-a" 'back-to-indentation-or-beginning)
-
+;;;###autoload
 (defun steven-close ()
   "Delete frame or kill emacs if there is only one frame left"
 
@@ -334,11 +319,31 @@ Some settings from the NANO config (I use prot's code for modifying C-g, which i
       (delete-frame)
     (error (save-buffers-kill-terminal))))
 
-(bind-key "C-x k" #'kill-current-buffer)
-(bind-key "C-x C-c" #'steven-close)
+;; Better C-a, taken from karthinks
+;;;###autoload
+(defun back-to-indentation-or-beginning () (interactive)
+   (if (= (point) (progn (beginning-of-line-text) (point)))
+       (beginning-of-line)))
+
+(provide 'setup-basic)
+;;setup-basic ends here
+#+end_src
+
+** The =init.el= section to add basic keybindings
+
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package bind-key
+  :bind (:map help-map ("y" . describe-personal-keybindings)))
+
+(use-package setup-basic
+  :bind (("C-g" . steven--keyboard-quit-dwim)
+         ("C-a" . back-to-indentation-or-beginning)
+         ("C-x C-c" . steven-close)))
+
 (bind-key "C-x C-r" #'recentf-open)
+(bind-key "C-x k" #'kill-current-buffer)
 (bind-key "M-n" #'make-frame)
-(bind-key "C-z"  nil) ;; No suspend frame
+(bind-key "C-z"  nil) ;; No suspend frame, used for vertico suspend
 
 ;; This has to be C-<up> but has issue on macOS.
 (bind-key "C-<up>" #'previous-logical-line)
@@ -360,12 +365,20 @@ Some settings from the NANO config (I use prot's code for modifying C-g, which i
 (bind-key "C-c C-m" #'execute-extended-command)
 (bind-key "C-x m" nil)
 
+;; C-x o → switch to other window (standard)
+(global-set-key (kbd "C-x o") #'other-frame)
+
+;; M-o → switch to other window
+(global-set-key (kbd "M-o") #'other-window)
+
 ;; One my annoyances
+(with-eval-after-load 'lisp-mode
+  (keymap-unset lisp-interaction-mode-map "C-c C-b"))
 (with-eval-after-load 'elisp-mode
-  (keymap-unset emacs-lisp-mode-map "C-c b"))
+  (keymap-unset emacs-lisp-mode-map "C-c C-b" nil))
 #+end_src
 
-** TODO The =init.el= section on scrolling behaviour
+** The =init.el= section on scrolling behaviour
 
 Attempting to make scrolling more smooth. The custom ’scroll half a screen’ commands were copied from Prot, but it does not behave well in org document with folded headings.
 
@@ -377,25 +390,41 @@ Attempting to make scrolling more smooth. The custom ’scroll half a screen’ 
 
 (pixel-scroll-precision-mode 1)
 
+#+end_src
+
+** The =text-extras.el= section on text stuff and semantic lins
+
+The semantic line switching code is copied from: [[https://sachachua.com/blog/2025/09/emacs-cycle-through-different-paragraph-formats-all-on-one-line-wrapped-max-one-sentence-per-line-one-sentence-per-line/][Emacs: Cycle through different paragraph formats: all on one line, wrapped, m...]]
+
+I also added a minor-mode to switch to One Sentence Per Visual Line for the whole buffer.
+#+begin_src emacs-lisp :tangle "steven/text-extras.el"
+;;; -*- lexical-binding: t -*-
+
+;;;###autoload
 (defun steven-scroll--quarter-screen-lines ()
   (max 1 (/ (window-body-height) 4)))
 
+;;;###autoload
 (defun steven-move-down-quarter-screen ()
   (interactive)
   (line-move (steven-scroll--quarter-screen-lines) t))
 
+;;;###autoload
 (defun steven-move-up-quarter-screen ()
   (interactive)
   (line-move (- (steven-scroll--quarter-screen-lines)) t))
 
+;;;###autoload
 (defun steven-scroll-down-quarter-screen ()
   (interactive)
   (scroll-up-command (steven-scroll--quarter-screen-lines)))
 
+;;;###autoload
 (defun steven-scroll-up-quarter-screen ()
   (interactive)
   (scroll-down-command (steven-scroll--quarter-screen-lines)))
 
+;;;###autoload
 (defun my-recenter-after-jump (window new-win-start)
   "Recenter the point after a non-scroll command brings it out of view.
 This function is meant to be called from the hook ‘window-scroll-functions’."
@@ -412,9 +441,92 @@ This function is meant to be called from the hook ‘window-scroll-functions’.
       (setq-local last-start-line-memo new-start-line))))
 (add-hook 'window-scroll-functions #'my-recenter-after-jump)
 
-(global-set-key (kbd "C-v") #'steven-scroll-down-quarter-screen)
-(global-set-key (kbd "M-v") #'steven-scroll-up-quarter-screen)
+;;;###autoload
+(defun my-unfill-paragraph ()
+  "Replace newline chars in current paragraph by single spaces.
+This command does the inverse of `fill-paragraph'"
+  (interactive)
+  (let ((fill-column most-positive-fixnum))
+    (fill-paragraph)))
 
+;;;###autoload
+(defun my-fill-paragraph-semlf-long ()
+  (interactive)
+  (let ((fill-column most-positive-fixnum))
+    (fill-paragraph-semlf)))
+
+;; It might be nice to figure out what state we're in and then cycle to the next one if we're just working with a single paragraph. In the meantime, just going by repeats is fine.
+(defvar my-cycle-functions
+  '(fill-paragraph
+    my-unfill-paragraph
+    my-fill-paragraph-semlf-long)
+  "Functions to cycle through.")
+
+(defvar my-cycle-index 0
+  "Current position in `my-cycle-functions`.")
+
+;;;###autoload
+(defun my-cycle-paragraph ()
+  "Cycle through paragraph formatting functions on repeated calls."
+  (interactive)
+  (unless (eq last-command this-command)
+    (setq my-cycle-index 0))
+  (let ((fn (nth my-cycle-index my-cycle-functions)))
+    (when fn
+      (call-interactively fn)
+      (message "Ran: %s" fn)))
+  (setq my-cycle-index
+        (mod (1+ my-cycle-index)
+             (length my-cycle-functions))))
+
+(defun steven-org-content-start ()
+  "Return position after Org front matter (#+ lines)."
+  (save-excursion
+    (goto-char (point-min))
+    (while (looking-at-p "^#\\+")
+      (forward-line 1))
+    (point)))
+
+;;;###autoload
+(defun steven-unfill-buffer ()
+  "Unfill the buffer, excluding Org front matter."
+  (interactive)
+  (let ((fill-column most-positive-fixnum))
+    (fill-region (steven-org-content-start) (point-max))))
+
+;;;###autoload
+(defun steven-fill-buffer-semlf ()
+  "Apply `fill-paragraph-semlf` to all paragraphs after front matter."
+  (interactive)
+  (save-excursion
+    (let ((fill-column most-positive-fixnum))
+      (goto-char (steven-org-content-start))
+      (while (< (point) (point-max))
+        ;; Skip headings and empty lines
+        (cond
+         ((org-at-heading-p)
+          (forward-line 1))
+         ((looking-at-p "^\\s-*$")
+          (forward-line 1))
+         (t
+          ;; Now we're in actual paragraph content
+          (fill-paragraph-semlf)
+          (forward-paragraph 1)))))))
+
+(define-minor-mode OSPV-mode
+  "One Sentence Per Visual-line mode (Org buffers only)."
+  :lighter " OSPV"
+  (unless (derived-mode-p 'org-mode)
+    (user-error "OSPV-mode only works in org-mode"))
+  (if OSPV-mode
+      (steven-fill-buffer-semlf)
+    (steven-unfill-buffer)))
+
+;; Set to t (non-nil) when entering org, not toggle DO NOT turn this on globablly, only in /Notes via .dir-locals
+;(add-hook 'org-mode-hook (lambda () (OSPV-mode t)))
+
+(provide 'text-extras)
+;;text-extras.el ends here
 #+end_src
 
 ** The =init.el= section setting the fonts
@@ -615,9 +727,6 @@ together with the Nano modeline
     (setq modus-themes-mixed-fonts t)
     (setq modus-themes-italic-constructs t))
 
-    ;; Finally, load your theme of choice (or a random one with `modus-themes-load-random', `modus-themes-load-random-dark', `modus-themes-load-random-light').
-
-  
 #+end_src
 
 #+begin_src emacs-lisp :tangle "init.el"
@@ -628,13 +737,14 @@ together with the Nano modeline
   ;; These are the default values.
   (setq doric-themes-to-toggle '(doric-light doric-dark))
   (setq doric-themes-to-rotate doric-themes-collection))
-
 #+end_src
 
-Here I set some custom overrides for the modus and doric themes. They
-are added to the after load theme hook. Note that I do not change the
-headerline look here,that is done in the corresponding setup in: 
-#+begin_src emacs-lisp :tangle "init.el"
+
+#+begin_src emacs-lisp :tangle "steven/theme-extras.el"
+;;; -*- lexical-binding: t -*-
+;; Here I set some custom overrides for the modus and doric themes. They
+;; are added to the after load theme hook. Note that I do not change the
+;; headerfline look here,that is done in the corresponding setup in setup-modeline.el 
 
 (defun steven--modus-themes-custom-faces (&rest _)
   (modus-themes-with-colors
@@ -643,7 +753,6 @@ headerline look here,that is done in the corresponding setup in:
      ;`(window-divider ((t :background ,bg-main :foreground ,bg-main)))
      ;`(window-divider-first-pixel ((t :background ,bg-main :foreground ,bg-main)))
      ;`(window-divider-last-pixel ((t :background ,bg-main :foreground ,bg-main)))
-     
      )))
 
 (defun steven--doric-themes-custom-faces (&rest _)
@@ -663,7 +772,8 @@ headerline look here,that is done in the corresponding setup in:
 (add-hook 'doric-themes-after-load-theme-hook
           #'steven--doric-themes-custom-faces)
 
-(doric-themes-load-theme 'doric-oak)
+(provide 'theme-extras)
+;;theme-extras ends here
 #+end_src
 
 OLD Nano colours
@@ -713,58 +823,60 @@ in some cases I want to have a box around the header-line which is
 overwritten if *:header-line-width* is non-zero.
 
 #+begin_src emacs-lisp :tangle "init.el"
-(require 'spacious-padding)
+(use-package spacious-padding
+  :ensure t
+  :demand t
+  :config
+  (defvar steven-spacious-padding-default-widths
+    '(:internal-border-width 20
+      :header-line-width 4
+      :mode-line-width 1
+      :custom-button-width 0
+      :tab-width 4
+      :right-divider-width 30
+      :scroll-bar-width 8
+      :fringe-width 0))
 
-(defvar steven-spacious-padding-default-widths
-  '(:internal-border-width 20
-    :header-line-width 4
-    :mode-line-width 1
-    :custom-button-width 0
-    :tab-width 4
-    :right-divider-width 30
-    :scroll-bar-width 8
-    :fringe-width 0))
+  (defvar steven-spacious-padding-default-lines
+    '(:mode-line-active header-line
+      :mode-line-inactive header-line-inactive
+      :header-line-active header-line
+      :header-line-inactive header-line-inactive))
 
-(defvar steven-spacious-padding-default-lines
-  '(:mode-line-active header-line
-    :mode-line-inactive header-line-inactive
-    :header-line-active header-line
-    :header-line-inactive header-line-inactive))
+  (defvar steven-spacious-padding-minimal-widths
+    '(:internal-border-width 20
+      :header-line-width 0
+      :mode-line-width 0
+      :custom-button-width 0
+      :tab-width 4
+      :right-divider-width 30
+      :scroll-bar-width 8
+      :fringe-width 0))
 
-(defvar steven-spacious-padding-minimal-widths
-  '(:internal-border-width 20
-    :header-line-width 0
-    :mode-line-width 0
-    :custom-button-width 0
-    :tab-width 4
-    :right-divider-width 30
-    :scroll-bar-width 8
-    :fringe-width 0))
+  (defvar steven-spacious-padding-minimal-lines
+    nil)
 
-(defvar steven-spacious-padding-minimal-lines
-  nil)
-
-
-(defun steven-apply-spacious-padding-default ()
-  "Apply the current spacious padding style."
-   (interactive)
-   (setq spacious-padding-widths
+  (defun steven-apply-spacious-padding-default ()
+    "Apply the default spacious padding style."
+    (interactive)
+    (setq spacious-padding-widths
           steven-spacious-padding-default-widths)
-   (setq spacious-padding-subtle-frame-lines
+    (setq spacious-padding-subtle-frame-lines
           steven-spacious-padding-default-lines)
-   (spacious-padding-mode -1)
-   (spacious-padding-mode 1))
+    (spacious-padding-mode -1)
+    (spacious-padding-mode 1))
 
-(defun steven-apply-spacious-padding-minimal ()
-  "Apply the current spacious padding style."
-   (interactive)
-   (setq spacious-padding-widths
+  (defun steven-apply-spacious-padding-minimal ()
+    "Apply the minimal spacious padding style."
+    (interactive)
+    (setq spacious-padding-widths
           steven-spacious-padding-minimal-widths)
-   (setq spacious-padding-subtle-frame-lines
+    (setq spacious-padding-subtle-frame-lines
           steven-spacious-padding-minimal-lines)
-   (spacious-padding-mode -1)
-   (spacious-padding-mode 1))
+    (spacious-padding-mode -1)
+    (spacious-padding-mode 1)))
 
+(steven-apply-spacious-padding-default)
 #+end_src
 
 #+begin_src emacs-lisp :tangle "init.el"
@@ -786,17 +898,21 @@ The main modeline works, but when using the mode-line-maker function the
 box is not drawns as I want. I think I can fix this by reworking [[*The
 =steven-modeline.el= section]]. I need to create a seperate custom face
 for the active and inactive modeline /with/ a box and have the standard
-modeline have /no/ box.
+modeline have /no/ box. This also holds for the headerline.
 
 This is a setup using mode-line-maker of Nicolas Rougier (link)
-#+begin_src emacs-lisp :tangle "init.el"
+#+begin_src emacs-lisp :tangle "steven/setup-modeline.el"
+;;; -*- lexical-binding: t -*-
+
 (require 'mode-line-maker)
 (require 'steven-headerline)
 (require 'steven-icons)
+(require 'modus-themes)
+(require 'doric-themes)
 
+;;;###autoload
 (defun steven-headerline-minimal ()
   "Install a modeline using modeline maker"
-
   (interactive)
   (let* (
          (left  '(
@@ -814,9 +930,9 @@ This is a setup using mode-line-maker of Nicolas Rougier (link)
 
 ;; This one might work, but I need to have a seperate face for the
 ;; header-line, e.g. steven-header-line so the :box draws correctly.
+;;;###autoload
 (defun steven-headerline-todo ()
   "Install a modeline using modeline maker - not working yet"
-
   (interactive)
   (let* (
          (left  '((:eval (steven-modeline-major-mode-icon))
@@ -833,9 +949,9 @@ This is a setup using mode-line-maker of Nicolas Rougier (link)
                       (mode-line-maker left right '(fringe . fringe) t))
         ))
 
+;;;###autoload
 (defun steven-headerline-default()
-  "Install a headerline using modeline maker"
-
+  "Install a headerline using modeline maker. This is my default one"
   (interactive)
     (setq-default mode-line-format "")
     (setq-default header-line-format 
@@ -849,19 +965,18 @@ This is a setup using mode-line-maker of Nicolas Rougier (link)
            (:eval (steven-header-line-right)))))
 
 ;;;; Also toggle modeline
-
+;;;###autoload
 (defun steven-modeline-minimal ()
   "Install a modeline using modeline maker, no content"
-
   (interactive)
   (setq mode-line-format 
       (mode-line-maker "" "" '(window . window) t))
   (setq-default mode-line-format 
       (mode-line-maker "" "" '(window . window) t)))  
 
+;;;###autoload
 (defun steven-modeline-default ()
   "Install a modeline using modeline maker - full version"
-
   (interactive)
   (let* (
          (left  '((:eval (steven-headerline-major-mode-name))
@@ -892,6 +1007,7 @@ Can be either 'default or 'minimal.")
   "Current modeline style.
 Can be either 'default or 'minimal.")
 
+;;;###autoload
 (defun steven-apply-headerline ()
   "Apply the current header line style to all buffers."
   (cond
@@ -908,6 +1024,7 @@ Can be either 'default or 'minimal.")
    (force-mode-line-update t)
    (redraw-display))
 
+;;;###autoload
 (defun steven-apply-modeline ()
   "Apply the current modeline style to all buffers."
   (cond
@@ -917,6 +1034,7 @@ Can be either 'default or 'minimal.")
      (steven-modeline-minimal))))
 
 ;;; Toggle function
+;;;###autoload
 (defun steven-toggle-headerline ()
   "Toggle between default and minimal header line styles."
   (interactive)
@@ -928,6 +1046,7 @@ Can be either 'default or 'minimal.")
   (message "Headerline style: %s"
            steven-headerline-style))
 
+;;;###autoload
 (defun steven-toggle-modeline ()
   "Toggle between default and minimal modeline styles."
   (interactive)
@@ -939,20 +1058,11 @@ Can be either 'default or 'minimal.")
   (message "Modeline style: %s"
            steven-modeline-style))
 
-(setq steven-modeline-style 'default)
-(setq steven-headerline-style 'default)
-(steven-apply-headerline)
-(steven-apply-modeline)
-(global-set-key (kbd "<f10>") #'steven-toggle-headerline)
-(global-set-key (kbd "<f8>") #'steven-toggle-modeline)
-#+end_src
+;; This part takes care of the styling of the headerline. It is important
+;; to turn on spacious padding after the set-custom-face is done, otherwise
+;; it does not work as expected. I just leave spacious padding off by
+;; default and turn it on with a toggle.
 
-This part takes care of the styling of the headerline. It is important
-to turn on spacious padding after the set-custom-face is done, otherwise
-it does not work as expected. I just leave spacious padding off by
-default and turn it on with a toggle.
-
-#+begin_src emacs-lisp :tangle "init.el"
 (defun steven--modus-headerline-faces (&rest _)
   (modus-themes-with-colors
     (custom-set-faces
@@ -1037,29 +1147,33 @@ default and turn it on with a toggle.
                             :box (:line-width 1 :color ,fg-shadow-subtle))))
      )))
 
-;(add-hook 'modus-themes-after-load-theme-hook #'steven--modus-nano-faces)
-
-;(remove-hook 'doric-themes-after-load-theme-hook
-;          #'steven--doric-themes-custom-faces)
-(add-hook 'doric-themes-after-load-theme-hook
-          #'steven--doric-headerline-faces)
 
 
-;(remove-hook 'modus-themes-after-load-theme-hook
-;          #'steven--modus-themes-custom-faces)
-(add-hook 'modus-themes-after-load-theme-hook
-          #'steven--modus-headerline-faces)
+(provide 'setup-modeline)
+;;setup-modeline.el ends here
+#+end_src
 
-(doric-themes-load-theme 'doric-oak)
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package setup-modeline
+  :demand t ;;make sure it always load and config is ran
+  :bind (("<f10>" . steven-toggle-headerline)
+         ("<f8>" . steven-toggle-modeline))
+  :hook ((doric-themes-after-load-theme . steven--doric-headerline-faces)
+         (modus-themes-after-load-theme . steven--modus-headerline-faces))
+  :config
+  (setq steven-modeline-style 'default
+        steven-headerline-style 'default)
+  (steven-apply-headerline)
+  (steven-apply-modeline))
 #+end_src
 
 ** The =init.el= section to load the default theme
 
-I am having some issues with spacious padding and the colour. Currenty
-hoping this will help.
-
 #+begin_src emacs-lisp :tangle "init.el"
-(doric-themes-load-theme 'doric-oak)
+(use-package theme-extras
+  :demand t
+  :config
+  (doric-themes-load-theme 'doric-oak))
 #+end_src
 
 ** The =init.el= section setting context var
@@ -1210,7 +1324,7 @@ Adds nerd icons to dired list
 
 ** The =steven-scratch.el= section for running a scratch buffer of any mode
 A much simpler version from karthinks:
-#+begin_src emacs-lisp :tangle "steven/steven-scratch.el"
+#+begin_src emacs-lisp :tangle "init.el"
 (use-package scratch
   :ensure t
   :config
@@ -1286,6 +1400,15 @@ using C-x 8.
   (setq colon-double-space nil)
   (setq use-hard-newlines nil)
   (setq adaptive-fill-mode t))
+
+(use-package text-extras
+  :bind
+  (("C-v" . steven-scroll-down-quarter-screen)
+   ("M-v" . steven-scroll-up-quarter-screen)
+   ("M-q" . steven-cycle-paragraph)
+   :map org-mode-map
+   ("<f6>" . OSPV-mode)))
+
 #+end_src
 
 ** TODO The =init.el= section taking care of visual-line-mode
@@ -1391,100 +1514,6 @@ Check [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Buffer-Display
                (dedicated . t)))
 #+end_src
 
-** TODO The =init.el= setting on semantic lines
-
-This code is copied from: [[https://sachachua.com/blog/2025/09/emacs-cycle-through-different-paragraph-formats-all-on-one-line-wrapped-max-one-sentence-per-line-one-sentence-per-line/][Emacs: Cycle through different paragraph formats: all on one line, wrapped, m...]]
-#+begin_src emacs-lisp :tangle "init.el"
-
-(defun my-unfill-paragraph ()
-  "Replace newline chars in current paragraph by single spaces.
-This command does the inverse of `fill-paragraph'"
-  (interactive)
-  (let ((fill-column most-positive-fixnum))
-    (fill-paragraph)))
-
-(defun my-fill-paragraph-semlf-long ()
-  (interactive)
-  (let ((fill-column most-positive-fixnum))
-    (fill-paragraph-semlf)))
-
-;; It might be nice to figure out what state we're in and then cycle to the next one if we're just working with a single paragraph. In the meantime, just going by repeats is fine.
-(defvar my-cycle-functions
-  '(fill-paragraph
-    my-unfill-paragraph
-    my-fill-paragraph-semlf-long)
-  "Functions to cycle through.")
-
-(defvar my-cycle-index 0
-  "Current position in `my-cycle-functions`.")
-
-(defun my-cycle-paragraph ()
-  "Cycle through paragraph formatting functions on repeated calls."
-  (interactive)
-  (unless (eq last-command this-command)
-    (setq my-cycle-index 0))
-  (let ((fn (nth my-cycle-index my-cycle-functions)))
-    (when fn
-      (call-interactively fn)
-      (message "Ran: %s" fn)))
-  (setq my-cycle-index
-        (mod (1+ my-cycle-index)
-             (length my-cycle-functions))))
-
-(keymap-global-set "M-q" #'my-cycle-paragraph)
-
-#+end_src
-
-Working on a minor mode: semlf mode
-#+begin_src emacs-lisp :tangle "init.el"
-(defun steven-org-content-start ()
-  "Return position after Org front matter (#+ lines)."
-  (save-excursion
-    (goto-char (point-min))
-    (while (looking-at-p "^#\\+")
-      (forward-line 1))
-    (point)))
-
-(defun steven-unfill-buffer ()
-  "Unfill the buffer, excluding Org front matter."
-  (interactive)
-  (let ((fill-column most-positive-fixnum))
-    (fill-region (steven-org-content-start) (point-max))))
-
-(defun steven-fill-buffer-semlf ()
-  "Apply `fill-paragraph-semlf` to all paragraphs after front matter."
-  (interactive)
-  (save-excursion
-    (let ((fill-column most-positive-fixnum))
-      (goto-char (steven-org-content-start))
-      (while (< (point) (point-max))
-        ;; Skip headings and empty lines
-        (cond
-         ((org-at-heading-p)
-          (forward-line 1))
-         ((looking-at-p "^\\s-*$")
-          (forward-line 1))
-         (t
-          ;; Now we're in actual paragraph content
-          (fill-paragraph-semlf)
-          (forward-paragraph 1)))))))
-
-(define-minor-mode OSPV-mode
-  "One Sentence Per Visual-line mode (Org buffers only)."
-  :lighter " OSPV"
-  (unless (derived-mode-p 'org-mode)
-    (user-error "OSPV-mode only works in org-mode"))
-  (if OSPV-mode
-      (steven-fill-buffer-semlf)
-    (steven-unfill-buffer)))
-
-;; Set to t (non-nil) when entering org, not toggle DO NOT turn this on globablly, only in /Notes via .dir-locals
-;(add-hook 'org-mode-hook (lambda () (OSPV-mode t)))
-
-(with-eval-after-load 'org
-  (define-key org-mode-map (kbd "<f6>") #'OSPV-mode))
-#+end_src
-
 ** The =init.el= setting to delete inserted text
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package delsel
@@ -1560,7 +1589,7 @@ though I prefer to have them as a prefix so as not to interfere with
 what I am typing.
   
 
-** TODO The =init.el= setup of dired
+** The =init.el= setup of dired
 
 - I turn on hide details because I dont need info on permission etc., it can be toggled when needed.
 - hl-line-mode: this makes the current line always highlighted
@@ -1582,6 +1611,18 @@ what I am typing.
     (setq delete-by-moving-to-trash t)
     (setq dired-dwim-target t)
     (setq dired-listing-switches "-alh --group-directories-first")
+    (defun steven--dired-layout ()
+       "Custom behaviors for dired layout."
+       (setq truncate-lines t))
+    (add-hook 'dired-mode-hook #'steven--dired-layout t)
+    (defun steven--dired-rename-buffer ()
+      "Rename Dired buffers to their directory name."
+      (when (derived-mode-p 'dired-mode)
+        (rename-buffer
+         (abbreviate-file-name
+          (expand-file-name dired-directory))
+         t)))
+    ;(add-hook 'dired-mode-hook #'steven--dired-rename-buffer)
     (use-package dired-x
        :ensure nil  ;; also built-in
        :config
@@ -1591,57 +1632,7 @@ what I am typing.
              "\\|^\\.stfolder$"
              "\\|^\\.localized$"))))
 
-(defun steven--dired-layout ()
-  "Custom behaviors for dired layout."
-  ;; First remove the entire header line:
-  ;(save-excursion
-  ;  (goto-char (point-min))
-  ;  (put-text-property
-  ;   (line-beginning-position)
-  ;   (1+ (line-end-position))
-  ;   'invisible t))
-  ;;truncate-lines is buffer local, so can be safely changed
-  (setq truncate-lines t))
-
-
-;; The following appends it to the hook list at the end
-(add-hook 'dired-mode-hook #'steven--dired-layout t)
-
-(defun steven--dired-rename-buffer ()
- "Rename Dired buffers to their directory name."
-  (when (derived-mode-p 'dired-mode)
-    (rename-buffer
-     (abbreviate-file-name
-      (expand-file-name dired-directory))
-     t)))
-
-;(add-hook 'dired-mode-hook #'steven--dired-rename-buffer)
-
-(defvar steven-dired--limit-hist '()
-  "Minibuffer history for `steven-dired-limit-regexp'.")
-
-;; Function from Prot:
-(defun steven-dired-limit-regexp (regexp omit)
-  "Limit Dired to keep files matching REGEXP.
-
-With optional OMIT argument as a prefix (\\[universal-argument]),
-exclude files matching REGEXP.
-
-Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
-  (interactive
-   (list
-    (read-regexp
-     (concat "Files "
-             (when current-prefix-arg
-               (propertize "NOT " 'face 'warning))
-             "matching PATTERN: ")
-     nil 'steven-dired--limit-hist)
-    current-prefix-arg))
-  (dired-mark-files-regexp regexp)
-  (unless omit (dired-toggle-marks))
-  (dired-do-kill-lines)
-  (add-to-history 'steven-dired--limit-hist regexp))
-
+(use-package dired-extras)
 #+end_src
 
 ** The =init.el= section on dired-subtree
@@ -1718,14 +1709,7 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   (dired-do-kill-lines)
   (add-to-history 'steven-dired--limit-hist regexp))
 
-(provide 'dired-extras)
-;;dired-extras.el end here
-#+end_src
-
-Custom function to pop dired in left pane at default directory of
-current file. I do not use this at the moment.
-
-#+begin_src emacs-lisp :tangle "init.el"
+;;;###autoload
 (defun steven-dired-here-side-left ()
   "Open Dired for current buffer's directory in a left side window."
   (interactive)
@@ -1737,8 +1721,10 @@ current file. I do not use this at the moment.
      buffer
      '((display-buffer-in-direction)
       (direction . left)
-      (window-width . 0.25)) 
-                                )))
+      (window-width . 0.25)))))
+
+(provide 'dired-extras)
+;;dired-extras.el end here
 #+end_src
 
 
@@ -1769,9 +1755,20 @@ the following default:
 - gptel system prompt
 
 #+begin_src emacs-lisp :tangle "init.el"
+(use-package setup-language
+  :bind ("C-<f7>" . steven-toggle-language)
+  :hook (text-mode . steven--apply-language-settings)
+  :config
+  (steven--apply-language-settings))
+#+end_src
+
+#+begin_src emacs-lisp :tangle "steven/setup-language.el"
+;;; -*- lexical-binding: t -*-
+
 (defvar steven--current-language 'english
   "Current system language.")
 
+;;;###autoload
 (defun steven--apply-language-settings ()
   "Apply settings for `my/current-language`."
   (pcase steven--current-language
@@ -1796,6 +1793,7 @@ the following default:
 
      (message "Language set to Dutch"))))
 
+;;;###autoload
 (defun steven-toggle-language ()
   "Toggle between English and Dutch."
   (interactive)
@@ -1806,8 +1804,24 @@ the following default:
 
   (steven--apply-language-settings))
 
-(steven--apply-language-settings)
-(bind-key "C-<f7>" #'steven-toggle-language)
+;obsolete
+(defun steven-toggle-spell-language ()
+  "Toggle between English and Dutch Hunspell dictionaries."
+  (interactive)
+  (let ((current-dict ispell-current-dictionary))
+    (cond
+     ((string= current-dict "en_GB")
+      (ispell-change-dictionary "nl_NL")
+      (message "Switched dictionary to Dutch (nl_NL)"))
+     ((string= current-dict "nl_NL")
+      (ispell-change-dictionary "en_GB")
+      (message "Switched dictionary to English (en_GB)"))
+     (t
+      (ispell-change-dictionary "en_GB")
+      (message "Defaulted dictionary to English (en_GB)")))))
+
+(provide 'setup-language)
+;;setup-languages.el ends here
 #+end_src
 
 ** TODO The =init.el= setup of the dictionary
@@ -1878,41 +1892,28 @@ To useflyspell on the entire buffer, run ’flyspell-buffer’
 
 #+begin_src emacs-lisp :tangle "init.el"
 ;; Use Hunspell as the spell-checker
-(when (executable-find "hunspell")
-  (setq-default ispell-program-name "hunspell")
-  (setq ispell-really-hunspell t))
+(use-package ispell
+  :ensure nil
+  :custom
+  (ispell-dictionary "nl_NL")
+  (flyspell-default-dictionary "nl_NL")
+  (ispell-local-dictionary-alist
+   '(("en_GB" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_GB") nil utf-8)
+     ("nl_NL" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "nl_NL") nil utf-8)))
+  :config
+  (when (executable-find "hunspell")
+    (setq-default ispell-program-name "hunspell")
+    (setq ispell-really-hunspell t)))
 
-(with-eval-after-load 'flyspell
-  (define-key flyspell-mode-map (kbd "C-.") nil))
-
-;; Default to Dutch
-(setq ispell-dictionary "nl_NL")
-(setq flyspell-default-dictionary "nl_NL")
-
-;; Tell Emacs where to find the dictionaries (optional if auto-detected)
-(setq ispell-local-dictionary-alist
-      '(("en_GB" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_GB") nil utf-8)
-        ("nl_NL" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "nl_NL") nil utf-8)))
-
+(use-package flyspell
+  :ensure nil
+  ;:hook (text-mode . flyspell-mode)
+  :bind
+  ("<f7>" . flyspell-mode)
+  (:map flyspell-mode-map
+   ("C-." . nil)))
 ;(add-hook 'text-mode-hook 'flyspell-mode)
 
-;obsolete
-(defun steven-toggle-spell-language ()
-  "Toggle between English and Dutch Hunspell dictionaries."
-  (interactive)
-  (let ((current-dict ispell-current-dictionary))
-    (cond
-     ((string= current-dict "en_GB")
-      (ispell-change-dictionary "nl_NL")
-      (message "Switched dictionary to Dutch (nl_NL)"))
-     ((string= current-dict "nl_NL")
-      (ispell-change-dictionary "en_GB")
-      (message "Switched dictionary to English (en_GB)"))
-     (t
-      (ispell-change-dictionary "en_GB")
-      (message "Defaulted dictionary to English (en_GB)")))))
-
-(bind-key "<f7>" #'flyspell-mode)
 #+end_src
 
 ** The =init.el= section to setup codeblock behaviour
@@ -2201,7 +2202,10 @@ Org refiling is set like this, so I see the full path of the outline. To deal wi
 
 *** The =init.el= section with custom org functions
 
-#+begin_src emacs-lisp :tangle "init.el"
+This are experiments, function copied from Rougier in GTD guide, but I do not
+use it. Note block are a funny idea, and in general maybe styling source
+blocks could be fun.
+#+begin_src emacs-lisp
 (defun log-todo-next-creation-date (&rest ignore)
   "Log NEXT creation time in the property drawer under the key 'ACTIVATED'"
   (when (and (string= (org-get-todo-state) "NEXT")
@@ -2375,29 +2379,14 @@ Export functions are set in my personal.el file.
 ** The =init.el= section to setup org-publish
 
 Custom function to publish image attachment with automatic resizing.
-Requires ImageMagick.
+Requires ImageMagick. See full custom function in [[*The =setup-export.el= section on exporting tools]]
 
 The command for ImageMagick is "magick %s -resize x350\> %s" \\
 x350 defines the height, the width is left out so that ImageMagick calculates the width automatically based on aspect ratio.
 \\
 350x would mean fixed width, calculate height The \> command means, only shrink, never enlarge.
 
-*This one does not work*, see below
-
-#+begin_src emacs-lisp :tangle "init.el"
-(defun org-publish-attachment-resize (_plist filename pub-dir)
-  "Publish a resource and resize it afterwards."
-  (org-publish-attachment _plist filename pub-dir)
-  (if (executable-find "magick")
-      (let* ((target (expand-file-name (file-name-nondirectory filename) pub-dir)))
-        (call-process "magick" nil nil nil
-                      target
-                      "-resize" "x350>"
-                      target))
-    (message "Magick not found; images not resized.")))
-#+end_src
-
-Publishing function for my recipe website. Table of Contents are removed for the entire website here using *:with-toc nil* 
+Publishing function for my recipe website. Table of Contents are removed for the entire website here using *:with-toc nil* , is stored in 
 
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package ox-publish
@@ -2409,7 +2398,17 @@ Publishing function for my recipe website. Table of Contents are removed for the
 Running mkdocs build as an async command, this means the shell is not interactive and only runs the lines as defined in the function.
 *Note* these funtions work exclusively for my Recipebook Website project.
 
-#+begin_src emacs-lisp :tangle "init.el" :results silent
+Another option, open a new =interactive= shell window and run mkdocs builds, in this way I can still interact with the shell afterwards, i.e.
+run git commands
+
+As for mkdocs build, this runs mkdocs serve as an async shell command. This is
+generally the preferred way in anycase.
+
+
+#+begin_src emacs-lisp :tangle "personal/mkdocs-extras.el"
+;;; -*- lexical-binding: t -*-
+
+;;;###autoload
 (defun steven-recipebook-mkdocs-build ()
   "Run mkdocs build as an async shell command"
   (interactive)
@@ -2417,12 +2416,8 @@ Running mkdocs build as an async command, this means the shell is not interactiv
     (async-shell-command
      "source .venv/bin/activate && mkdocs build"
      "*mkdocs build*")))
-#+end_src
 
-Another option, open a new =interactive= shell window and run mkdocs builds, in this way I can still interact with the shell afterwards, i.e.
-run git commands
-
-#+begin_src emacs-lisp :tangle "init.el"
+;;;###autoload
 (defun steven-recipebook-mkdocs-build-shell ()
   "Run mkdocs build in a interactive shell"
   (interactive)
@@ -2430,12 +2425,8 @@ run git commands
     (shell "*mkdocs-shell*")
     (comint-send-string "*mkdocs-shell*"
                         "source .venv/bin/activate && mkdocs build\n")))
-#+end_src
 
-As for mkdocs build, this runs mkdocs serve as an async shell command. This is
-generally the preferred way in anycase.
-
-#+begin_src emacs-lisp :tangle "init.el" :results silent
+;;;###autoload
 (defun steven-recipebook-mkdocs-serve ()
   "Run mkdocs serve as an async shell commaned"
   (interactive)
@@ -2444,6 +2435,104 @@ generally the preferred way in anycase.
      "source .venv/bin/activate && mkdocs serve"
      "*mkdocs serve*")))
 
+
+(provide 'mkdocs-extras)
+;;mkdocs-extras.el ends here
+#+end_src
+
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package mkdocs-extras)
+#+end_src
+
+** The =setup-export.el= section on exporting tools 
+
+#+begin_src emacs-lisp :tangle "personal/setup-export.el"
+;;; -*- lexical-binding: t -*-
+
+(setq org-publish-project-alist
+      '(("recipebook-recipes"
+         :base-directory "~/Documents/Recipebook/Recipes"
+         :publishing-directory "~/web/recipebook-org/docs/Maaltijden"
+         :recursive t
+         :with-toc nil
+         :publishing-function org-md-publish-to-md)
+        ("recipebook-images"
+         :base-directory "~/Documents/Recipebook/Recipes/images"
+         :publishing-directory "~/web/recipebook-org/docs/Maaltijden/images"
+         :recursive t
+         :base-extension "png\\|jpg\\|gif\\|jpeg"
+         :publishing-function org-publish-attachment-resize)
+        ("recipebook" :components ("recipebook-recipes" "recipebook-images"))))
+
+(add-to-list 'org-latex-classes
+                 '("memoir"
+                   "\\documentclass[12pt,oneside]{memoir}
+
+% Encoding/font setup
+\\usepackage[T1]{fontenc}
+\\usepackage[utf8]{inputenc}
+\\usepackage{lmodern}
+
+% Better typography
+\\usepackage{microtype}
+
+% Optional paragraph spacing
+\\setlength{\\parskip}{0pt}
+\\setlength{\\parindent}{1.5em}
+
+% scene break command
+\\makeatletter
+\\newcommand{\\scenebreak}{%
+  \\vspace{1.5em}
+  \\begin{center}
+    ,* * *
+  \\end{center}
+  \\vspace{1.5em}
+  \\@afterindentfalse\\@afterheading
+}
+\\makeatother
+
+% Page layout
+\\setlrmarginsandblock{1.3in}{1.3in}{*}
+\\setulmarginsandblock{1.2in}{1.2in}{*}
+\\checkandfixthelayout
+
+% Chapter style
+\\chapterstyle{veelo}
+
+% Remove section numbering if desired
+\\setsecnumdepth{subsection}
+
+% Extras
+\\usepackage{hyperref}
+
+[NO-DEFAULT-PACKAGES]
+[PACKAGES]
+[EXTRA]"
+
+                         ("\\chapter{%s}" . "\\chapter*{%s}")
+                         ("\\section{%s}" . "\\section*{%s}")
+                         ("\\subsection{%s}" . "\\subsection*{%s}")
+                         ("\\subsubsection{%s}" . "\\subsubsection*{%s}")))
+
+;; Resizing function used in recipebook website
+(defun org-publish-attachment-resize (_plist filename pub-dir)
+  "Publish a resource and resize it afterwards."
+  (org-publish-attachment _plist filename pub-dir)
+  (if (executable-find "magick")
+      (let* ((target (expand-file-name (file-name-nondirectory filename) pub-dir)))
+        (call-process "magick" nil nil nil
+                      target
+                      "-resize" "x350>"
+                      target))
+    (message "Magick not found; images not resized.")))
+
+(provide 'setup-export)
+;;setup-export ends here
+#+end_src
+
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package setup-export)
 #+end_src
 
 ** The =init.el= section to setup expand-region
@@ -3249,12 +3338,12 @@ I need to check how the :bind setup works, it might load the libraries not how I
   (:map embark-identifier-map
         ("m" . center-line) ;c is taken by capatilize. m for middle
         ("d" . dictionary-search)
-        ("w" . wiktionary-bro)
-        ("e" . steven-gptel-lookup)) ;etmology search with gptel
+        ("w" . wiktionary-bro))
+        ;("e" . steven-gptel-lookup)) ;etmology search with gptel
   (:map embark-region-map
         ("m" . center-region) ; m for middle
-        ("=" . quick-calc)
-        ("x" . steven-gptel-prompt-and-respond))
+        ("=" . quick-calc))
+        ;("x" . steven-gptel-prompt-and-respond))
   (:map embark-file-map
         ("L" . load-file)
         ("C" . steven-embark-copy-file-or-directory)) ;from embark-extras
@@ -3370,7 +3459,7 @@ I need to check how the :bind setup works, it might load the libraries not how I
   (avy-background t))             ; dim background during selection
 #+end_src
 
-** The =init.el= section on ncompletions and CAPE
+** The =init.el= section on completions and CAPE
 
 Something I want to try:
 #+begin_src emacs-lisp :tangle "init.el"
@@ -3612,6 +3701,15 @@ see what I like.
 ;; Bind Beframe commands to a prefix key, such as C-c b:
 (define-key global-map (kbd "C-x C-b") #'beframe-prefix-map)
 
+
+
+#+end_src
+
+** The =frame-extras.el= section on frame commands
+
+#+begin_src emacs-lisp :tangle "steven/frame-extras.el"
+;;; -*- lexical-binding: t -*-
+
 (defun steven--get-frame-by-name (name)
   "Return frame with NAME or nil."
   (seq-find
@@ -3626,6 +3724,7 @@ see what I like.
         (cons frame nil)
       (cons (make-frame `((name . ,name))) t))))
 
+;;;###autoload
 (defun steven-switch-to-home-frame ()
   "Switch to the frame named \"home\"."
   (interactive)
@@ -3636,8 +3735,7 @@ see what I like.
     (when frame
       (select-frame-set-input-focus frame))))
 
-(global-set-key (kbd "C-c f h") #'steven-switch-to-home-frame)
-
+;;;###autoload
 (defun steven-switch-to-wiki-frame ()
   "Switch to Wiki frame; create it if missing, and only initialize once."
   (interactive)
@@ -3652,6 +3750,7 @@ see what I like.
       (with-selected-frame frame
         (dired "~/Documents/Wiki/")))))
 
+;;;###autoload
 (defun steven-select-frame ()
   "Select a frame from a list of existing frames."
   (interactive)
@@ -3664,17 +3763,15 @@ see what I like.
     (when frame
       (select-frame-set-input-focus frame))))
 
-(global-set-key (kbd "C-c f s") #'steven-select-frame)
+(provide 'frame-extras.el)
+;;frame-extras ends here
+#+end_src
 
-(bind-key "C-c f w" #'steven-switch-to-wiki-frame)
-;(bind-key "C-c n w" #'steven-search-in-wiki)
-
-;; C-x o → switch to other window (standard, but you asked for frame behavior)
-(global-set-key (kbd "C-x o") #'other-frame)
-
-;; M-o → switch to other window
-(global-set-key (kbd "M-o") #'other-window)
-
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package frame-extras
+  :bind (("C-c f s" . steven-select-frame)
+         ("C-c f h" . steven-switch-to-home-frame)
+         ("C-c f w" . steven-switch-to-wiki-frame)))
 #+end_src
 
 ** The =init.el= section on shell
@@ -3682,7 +3779,6 @@ see what I like.
 Basic settings:
 #+begin_src emacs-lisp :tangle "init.el"
 ;;; Standard Unix Shell (M-x shell)
-
 
 ;; Check Prots .bashrc which handles `comint-terminfo-terminal':
 ;;
@@ -3938,9 +4034,6 @@ Add a bookmark handler for shell buffer and activate the
 
 #+end_src
 
-
-
-
 ** The =init.el= section on eat
 
 #+begin_src emacs-lisp :tangle "init.el"
@@ -3993,7 +4086,7 @@ Setting for notmuch client in emacs are below:
    
 #+end_src
 
-#+begin_src emacs-lisp :tangle "init.el"
+#+begin_src emacs-lisp :tangle "personal/email-extras.el"
 (defun steven/notmuch-archive-and-mark-read ()
     "Archive the current message and remove the unread tag."
     (interactive)
@@ -4009,17 +4102,7 @@ Setting for notmuch client in emacs are below:
       (notmuch-show-next-message)
       ;; prevent recentering jump
       (set-window-start (selected-window) winstart t)))
-#+end_src
 
-*** The =init.el= section with gluecode for notmuch and org
-
-#+begin_src emacs-lisp :tangle "init.el"
-(use-package ol-notmuch
-  :ensure t
-  :after notmuch)
-#+end_src
-
-#+begin_src emacs-lisp :tangle "init.el"
 (defun my-notmuch-bookmark-jump (bookmark)
   "Jump to a notmuch saved search bookmark."
   (let ((search (bookmark-prop-get bookmark 'notmuch-search)))
@@ -4040,6 +4123,15 @@ Setting for notmuch client in emacs are below:
     (bookmark-store name bookmark nil)
     (message "Stored notmuch search bookmark: %s (%s)" name search)))
 #+end_src
+
+*** The =init.el= section with gluecode for notmuch and org
+
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package ol-notmuch
+  :ensure t
+  :after notmuch)
+#+end_src
+
 
 ** The =init.el= section magit setup
 
@@ -4107,9 +4199,14 @@ Some notes on settings:
   (with-eval-after-load 'magit
     (setq magit-format-file-function #'magit-format-file-nerd-icons)))
 
+(use-package magit-extras)
+
 #+end_src
 
-#+begin_src emacs-lisp :tangle "init.el"
+#+begin_src emacs-lisp :tangle "steven/magit-extras.el"
+;;; -*- lexical-binding: t -*-
+
+;;;###autoload
 (defun steven-magit-add-all-and-commit ()
   "Run git add -A and start a Magit commit."
   (interactive)
@@ -4126,6 +4223,9 @@ Some notes on settings:
 
   ;; Open commit buffer
   (magit-commit-create))
+
+(provide 'magit-extras)
+;;magit-extras ends here
 #+end_src
 
 ** The =init.el= section on auto-revert
@@ -4151,34 +4251,42 @@ regularly.
     :ensure t
     :config
     (pdf-tools-install)
-
     (add-hook 'pdf-view-mode-hook #'auto-revert-mode)))
 
 #+end_src
 
-** The =init.el= sectioon on the setup of latex
+** The =init.el= sectioon on the setup of latex and pdf
 
 This is my config, some custom functions to ease exporting. At the
 moment this is still not async, have some issues on mac, lets see if its
 better with Linux.
-#+begin_src emacs-lisp :tangle "init.el"
-(require 'ox-latex)
-(global-set-key (kbd "<f1>") #'org-latex-export-to-pdf)
-;; Use pdflatex by default
-(setq org-latex-compiler "pdflatex")
-;; Should handle auto refresh, later I can setup an external viewer
-(setq TeX-view-program-selection '((output-pdf "PDF Tools")))
 
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package ox-latex
+  :ensure nil
+  :bind ("<f1>" . org-latex-export-to-pdf)
+  :custom
+  (org-latex-compiler "pdflatex")
+  ;; set standard viewer to emacs pdf-tools
+  (TeX-view-program-selection '((output-pdf "PDF Tools"))))
+#+end_src
+
+#+begin_src emacs-lisp :tangle "steven/pdf-extras.el"
+;;; -*- lexical-binding: t -*-
+
+;;;###autoload
 (defun steven-org-export-pdf ()
   (interactive)
   (org-latex-export-to-pdf)) ; t mean async export (not working)
 
+;;;###autoload
 (defun steven-org-export-pdf-and-open-ext ()
   (interactive)
   (let ((output (org-latex-export-to-pdf)))
     (when output
       (org-open-file output))))
 
+;;;###autoload
 (defun steven-org-export-pdf-and-open ()
   (interactive)
   (let ((output (org-latex-export-to-pdf)))
@@ -4192,16 +4300,22 @@ better with Linux.
         (cons (face-attribute 'default :foreground)
               (face-attribute 'default :background)))
 
+;;;###autoload
 (defun steven--pdf-set-dark-background ()
   (interactive)
   (if pdf-view-midnight-minor-mode
       (pdf-view-midnight-minor-mode -1)
     (pdf-view-midnight-minor-mode 1)))
 
-(global-set-key (kbd "C-c t l") #'steven--pdf-set-dark-background)
-(global-set-key (kbd "<f1>") #'steven-org-export-pdf)
-(global-set-key (kbd "C-<f1>") #'steven-org-export-pdf-and-open)
+(provide 'pdf-extras)
+;;pdf-extras.el ends here
+#+end_src
 
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package pdf-extras
+  :bind (("C-c t l" . steven--pdf-set-dark-background)
+         ("<f1>" . steven-org-export-pdf)
+         ("C-<f1>" . steven-org-export-pdf-and-open)))
 #+end_src
 
 ** The =init.el= section to setup gptel
@@ -4295,8 +4409,12 @@ better with Linux.
   :config (gptel-agent-update))         ;Read files from agents directories
 
 (use-package gptel-extras
-  :after gptel
+  :after (gptel embark)
   :bind
+  (:map embark-identifier-map
+        ("e" . steven-gptel-lookup))
+  (:map embark-region-map
+        ("x" . steven-gptel-prompt-and-respond))
   (:map global-gptel-map
         ("b" . steven-gptel-switch-backend)
         ("e" . steven-gptel-lookup) ;etmology lookup
@@ -4596,7 +4714,10 @@ Fujifilm X-E3 guidance rules:
 ** TODO The =init.el= section with center document mode
 This is copied from the 'Emacs From Scratch' series. See [[https://github.com/daviwil/emacs-from-scratch][GitHub - daviwil/emacs-from-scratch]]
 
-#+begin_src emacs-lisp :tangle "init.el"
+#+begin_src emacs-lisp :tangle "steven/center-document-mode.el"
+;;; -*- lexical-binding: t -*-
+;; Simple version of olivetti mode, from Systemcrafters
+
 (defvar center-document-desired-width 80
   "The desired width of a document centered in the window.")
 
@@ -4615,10 +4736,7 @@ This is copied from the 'Emacs From Scratch' series. See [[https://github.com/da
       (when (> margin-width 0)
         (set-window-parameter nil 'min-margins '(0 . 0))
         (set-window-margins nil margin-width margin-width)))))
-#+end_src
 
-
-#+begin_src emacs-lisp :tangle "init.el"
 (define-minor-mode center-document-mode
   "Toggle centered text layout in the current buffer."
   :lighter " Centered"
@@ -4629,17 +4747,22 @@ This is copied from the 'Emacs From Scratch' series. See [[https://github.com/da
   (center-document--adjust-margins))
 
 ;;small helper to adjust window after font change
+;;;###autoload
 (defun center-document-refresh ()
   (interactive)
   (when center-document-mode
     (center-document--adjust-margins)))
+
+(provide 'center-document-mode)
+;;center-document-mode ends here
 #+end_src
 
-
-#+begin_src emacs-lisp
-(add-hook 'org-mode-hook #'center-document-mode)
-(add-hook 'markdown-mode-hook #'center-document-mode)
-(add-hook 'text-mode-hook #'center-document-mode)
+#+begin_src emacs-lisp :tangle "init.el"
+(use-package center-document-mode
+  ;:hook ((org-mode . center-document-mode)
+  ;       (markdown-mode . center-document-mode)
+  ;       (text-mode . center-document-mode))
+  )
 #+end_src
 
 ** The =init.el= section to load show-font 

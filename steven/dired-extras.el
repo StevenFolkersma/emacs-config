@@ -25,5 +25,19 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   (dired-do-kill-lines)
   (add-to-history 'steven-dired--limit-hist regexp))
 
+;;;###autoload
+(defun steven-dired-here-side-left ()
+  "Open Dired for current buffer's directory in a left side window."
+  (interactive)
+  (let* ((dir (or (and (buffer-file-name)
+                       (file-name-directory (buffer-file-name)))
+                  default-directory))
+         (buffer (dired-noselect dir)))
+    (display-buffer
+     buffer
+     '((display-buffer-in-direction)
+      (direction . left)
+      (window-width . 0.25)))))
+
 (provide 'dired-extras)
 ;;dired-extras.el end here

@@ -56,55 +56,18 @@
       (setq with-editor-emacsclient-executable
             "/usr/local/bin/emacsclient")))
 
-(defun steven--keyboard-quit-dwim ()
-  "Do-What-I-Mean behaviour for a general `keyboard-quit'.
-
-The generic `keyboard-quit' does not do the expected thing when the
-minibuffer is open.
-Whereas we want it to close the minibuffer, even without explicitly
-focusing it.
-
-The DWIM behaviour of this command is as follows:
-
-- When the region is active, disable it.
-- When a minibuffer is open, but not focused, close the minibuffer.
-- When the Completions buffer is selected, close it.
-- In every other case use the regular `keyboard-quit'."
-  (interactive)
-  (cond
-   ((region-active-p)
-    (keyboard-quit))
-   ((derived-mode-p 'completion-list-mode)
-    (delete-completion-window))
-   ((> (minibuffer-depth) 0)
-    (abort-recursive-edit))
-   (t
-    (keyboard-quit))))
-
-(define-key global-map (kbd "C-g") #'steven--keyboard-quit-dwim)
-
-(defun back-to-indentation-or-beginning () (interactive)
-   (if (= (point) (progn (beginning-of-line-text) (point)))
-       (beginning-of-line)))
-
 (use-package bind-key
   :bind (:map help-map ("y" . describe-personal-keybindings)))
 
-(global-set-key "\C-a" 'back-to-indentation-or-beginning)
+(use-package setup-basic
+  :bind (("C-g" . steven--keyboard-quit-dwim)
+         ("C-a" . back-to-indentation-or-beginning)
+         ("C-x C-c" . steven-close)))
 
-(defun steven-close ()
-  "Delete frame or kill emacs if there is only one frame left"
-
-  (interactive)
-  (condition-case nil
-      (delete-frame)
-    (error (save-buffers-kill-terminal))))
-
-(bind-key "C-x k" #'kill-current-buffer)
-(bind-key "C-x C-c" #'steven-close)
 (bind-key "C-x C-r" #'recentf-open)
+(bind-key "C-x k" #'kill-current-buffer)
 (bind-key "M-n" #'make-frame)
-(bind-key "C-z"  nil) ;; No suspend frame
+(bind-key "C-z"  nil) ;; No suspend frame, used for vertico suspend
 
 ;; This has to be C-<up> but has issue on macOS.
 (bind-key "C-<up>" #'previous-logical-line)
@@ -126,9 +89,17 @@ The DWIM behaviour of this command is as follows:
 (bind-key "C-c C-m" #'execute-extended-command)
 (bind-key "C-x m" nil)
 
+;; C-x o → switch to other window (standard)
+(global-set-key (kbd "C-x o") #'other-frame)
+
+;; M-o → switch to other window
+(global-set-key (kbd "M-o") #'other-window)
+
 ;; One my annoyances
+(with-eval-after-load 'lisp-mode
+  (keymap-unset lisp-interaction-mode-map "C-c C-b"))
 (with-eval-after-load 'elisp-mode
-  (keymap-unset emacs-lisp-mode-map "C-c b"))
+  (keymap-unset emacs-lisp-mode-map "C-c C-b" nil))
 
 (setq scroll-conservatively 101 ; affects `scroll-step'
       scroll-margin 3
@@ -136,44 +107,6 @@ The DWIM behaviour of this command is as follows:
       scroll-preserve-screen-position t)
 
 (pixel-scroll-precision-mode 1)
-
-(defun steven-scroll--quarter-screen-lines ()
-  (max 1 (/ (window-body-height) 4)))
-
-(defun steven-move-down-quarter-screen ()
-  (interactive)
-  (line-move (steven-scroll--quarter-screen-lines) t))
-
-(defun steven-move-up-quarter-screen ()
-  (interactive)
-  (line-move (- (steven-scroll--quarter-screen-lines)) t))
-
-(defun steven-scroll-down-quarter-screen ()
-  (interactive)
-  (scroll-up-command (steven-scroll--quarter-screen-lines)))
-
-(defun steven-scroll-up-quarter-screen ()
-  (interactive)
-  (scroll-down-command (steven-scroll--quarter-screen-lines)))
-
-(defun my-recenter-after-jump (window new-win-start)
-  "Recenter the point after a non-scroll command brings it out of view.
-This function is meant to be called from the hook ‘window-scroll-functions’."
-  (interactive)
-  (with-selected-window window
-    (let* ((new-start-line (line-number-at-pos new-win-start))
-           (old-start-line (or (bound-and-true-p last-start-line-memo)
-                               (line-number-at-pos (point))))
-           (distance (abs (- old-start-line new-start-line))))
-      (when (and (> distance 5)
-                 (not isearch-mode)
-                 (not (get last-command 'scroll-command)))
-        (recenter))
-      (setq-local last-start-line-memo new-start-line))))
-(add-hook 'window-scroll-functions #'my-recenter-after-jump)
-
-(global-set-key (kbd "C-v") #'steven-scroll-down-quarter-screen)
-(global-set-key (kbd "M-v") #'steven-scroll-up-quarter-screen)
 
 (set-fontset-font t 'symbol (font-spec :family "Symbols Nerd Font Mono"))
 
@@ -322,8 +255,6 @@ This function is meant to be called from the hook ‘window-scroll-functions’.
     (setq modus-themes-mixed-fonts t)
     (setq modus-themes-italic-constructs t))
 
-    ;; Finally, load your theme of choice (or a random one with `modus-themes-load-random', `modus-themes-load-random-dark', `modus-themes-load-random-light').
-
 (use-package doric-themes
   :ensure t
   :demand t
@@ -332,86 +263,60 @@ This function is meant to be called from the hook ‘window-scroll-functions’.
   (setq doric-themes-to-toggle '(doric-light doric-dark))
   (setq doric-themes-to-rotate doric-themes-collection))
 
-(defun steven--modus-themes-custom-faces (&rest _)
-  (modus-themes-with-colors
-    (custom-set-faces
-     ;`(fringe ((t :background ,bg-main :foreground ,bg-main)))
-     ;`(window-divider ((t :background ,bg-main :foreground ,bg-main)))
-     ;`(window-divider-first-pixel ((t :background ,bg-main :foreground ,bg-main)))
-     ;`(window-divider-last-pixel ((t :background ,bg-main :foreground ,bg-main)))
-     
-     )))
+(use-package spacious-padding
+  :ensure t
+  :demand t
+  :config
+  (defvar steven-spacious-padding-default-widths
+    '(:internal-border-width 20
+      :header-line-width 4
+      :mode-line-width 1
+      :custom-button-width 0
+      :tab-width 4
+      :right-divider-width 30
+      :scroll-bar-width 8
+      :fringe-width 0))
 
-(defun steven--doric-themes-custom-faces (&rest _)
-  (doric-themes-with-colors
-    (custom-set-faces
-     `(region ((t :extend nil))) ; extend region bg only untill fill column width
-     ;`(fringe ((t :background ,bg-main :foreground ,bg-main)))
-     `(orderless-match-face-0 ((t :inherit bold :foreground ,fg-shadow-subtle)))
-     `(orderless-match-face-1 ((t :inherit bold :foreground ,fg-neutral)))
-     `(orderless-match-face-2 ((t :inherit bold :foreground ,fg-shadow-intense)))
-     `(orderless-match-face-3 ((t :inherit bold :foreground ,fg-shadow-subtle)))
-     )))
+  (defvar steven-spacious-padding-default-lines
+    '(:mode-line-active header-line
+      :mode-line-inactive header-line-inactive
+      :header-line-active header-line
+      :header-line-inactive header-line-inactive))
 
-(add-hook 'modus-themes-after-load-theme-hook
-          #'steven--modus-themes-custom-faces)
+  (defvar steven-spacious-padding-minimal-widths
+    '(:internal-border-width 20
+      :header-line-width 0
+      :mode-line-width 0
+      :custom-button-width 0
+      :tab-width 4
+      :right-divider-width 30
+      :scroll-bar-width 8
+      :fringe-width 0))
 
-(add-hook 'doric-themes-after-load-theme-hook
-          #'steven--doric-themes-custom-faces)
+  (defvar steven-spacious-padding-minimal-lines
+    nil)
 
-(doric-themes-load-theme 'doric-oak)
-
-(require 'spacious-padding)
-
-(defvar steven-spacious-padding-default-widths
-  '(:internal-border-width 20
-    :header-line-width 4
-    :mode-line-width 1
-    :custom-button-width 0
-    :tab-width 4
-    :right-divider-width 30
-    :scroll-bar-width 8
-    :fringe-width 0))
-
-(defvar steven-spacious-padding-default-lines
-  '(:mode-line-active header-line
-    :mode-line-inactive header-line-inactive
-    :header-line-active header-line
-    :header-line-inactive header-line-inactive))
-
-(defvar steven-spacious-padding-minimal-widths
-  '(:internal-border-width 20
-    :header-line-width 0
-    :mode-line-width 0
-    :custom-button-width 0
-    :tab-width 4
-    :right-divider-width 30
-    :scroll-bar-width 8
-    :fringe-width 0))
-
-(defvar steven-spacious-padding-minimal-lines
-  nil)
-
-
-(defun steven-apply-spacious-padding-default ()
-  "Apply the current spacious padding style."
-   (interactive)
-   (setq spacious-padding-widths
+  (defun steven-apply-spacious-padding-default ()
+    "Apply the default spacious padding style."
+    (interactive)
+    (setq spacious-padding-widths
           steven-spacious-padding-default-widths)
-   (setq spacious-padding-subtle-frame-lines
+    (setq spacious-padding-subtle-frame-lines
           steven-spacious-padding-default-lines)
-   (spacious-padding-mode -1)
-   (spacious-padding-mode 1))
+    (spacious-padding-mode -1)
+    (spacious-padding-mode 1))
 
-(defun steven-apply-spacious-padding-minimal ()
-  "Apply the current spacious padding style."
-   (interactive)
-   (setq spacious-padding-widths
+  (defun steven-apply-spacious-padding-minimal ()
+    "Apply the minimal spacious padding style."
+    (interactive)
+    (setq spacious-padding-widths
           steven-spacious-padding-minimal-widths)
-   (setq spacious-padding-subtle-frame-lines
+    (setq spacious-padding-subtle-frame-lines
           steven-spacious-padding-minimal-lines)
-   (spacious-padding-mode -1)
-   (spacious-padding-mode 1))
+    (spacious-padding-mode -1)
+    (spacious-padding-mode 1)))
+
+(steven-apply-spacious-padding-default)
 
 ;(steven-apply-spacious-padding)
 
@@ -420,262 +325,22 @@ This function is meant to be called from the hook ‘window-scroll-functions’.
 
 ;(define-key global-map (kbd "<f8>") #'spacious-padding-mode)
 
-(require 'mode-line-maker)
-(require 'steven-headerline)
-(require 'steven-icons)
-
-(defun steven-headerline-minimal ()
-  "Install a modeline using modeline maker"
-
-  (interactive)
-  (let* (
-         (left  '(
-                  (:eval (steven-headerline-buffer-name))
-                  " "
-                  (:eval (steven-headerline-context))
-                  " "))
-         (right `((:eval (steven-header-line-right)) "")))
-        (setq-default mode-line-format "")
-        (setq header-line-format 
-              (mode-line-maker left right '(fringe . fringe)))
-        (setq-default header-line-format 
-                      (mode-line-maker left right '(fringe . fringe)))
-        ))
-
-;; This one might work, but I need to have a seperate face for the
-;; header-line, e.g. steven-header-line so the :box draws correctly.
-(defun steven-headerline-todo ()
-  "Install a modeline using modeline maker - not working yet"
-
-  (interactive)
-  (let* (
-         (left  '((:eval (steven-modeline-major-mode-icon))
-                  (:eval (propertize " " 'display '(raise +0.25)))
-                  (:eval (steven-headerline-buffer-name))
-                  (:eval (propertize " " 'display '(raise -0.25)))
-                  (:eval (steven-headerline-context)))
-                  )
-         (right `((:eval (steven-header-line-right)) "")))
-        (setq-default mode-line-format "")
-        (setq header-line-format 
-              (mode-line-maker left right '(fringe . fringe) t))
-        (setq-default header-line-format 
-                      (mode-line-maker left right '(fringe . fringe) t))
-        ))
-
-(defun steven-headerline-default()
-  "Install a headerline using modeline maker"
-
-  (interactive)
-    (setq-default mode-line-format "")
-    (setq-default header-line-format 
-          '(
-           (:eval (steven-modeline-major-mode-icon))
-           (:eval (propertize " " 'display '(raise -0.25)))
-           (:eval (steven-headerline-buffer-name))
-           (:eval (propertize " " 'display '(raise +0.25)))
-           (:eval (steven-headerline-context))
-           (:eval (steven-header-line-align-right))
-           (:eval (steven-header-line-right)))))
-
-;;;; Also toggle modeline
-
-(defun steven-modeline-minimal ()
-  "Install a modeline using modeline maker, no content"
-
-  (interactive)
-  (setq mode-line-format 
-      (mode-line-maker "" "" '(window . window) t))
-  (setq-default mode-line-format 
-      (mode-line-maker "" "" '(window . window) t)))  
-
-(defun steven-modeline-default ()
-  "Install a modeline using modeline maker - full version"
-
-  (interactive)
-  (let* (
-         (left  '((:eval (steven-headerline-major-mode-name))
-                  " "
-                  (:eval (steven--headerline-git-info))
-                  ))
-
-         (right `("( "
-                  (:eval (steven--header-line-language))
-                  (:eval (steven--modeline-input-method))
-                  ;(:eval (steven--modeline-file-size))
-                  (:eval (steven-header-line-ispell-dict))
-                  ") "
-                  (:eval (steven--modeline-cursor-position))
-                  )))
-
-        (setq mode-line-format 
-              (mode-line-maker left right '(window . window) t))
-        (setq-default mode-line-format 
-              (mode-line-maker left right '(window . window) t))
-        ))
-
-(defvar steven-headerline-style 'default
-  "Current header line style.
-Can be either 'default or 'minimal.")
-
-(defvar steven-modeline-style 'default
-  "Current modeline style.
-Can be either 'default or 'minimal.")
-
-(defun steven-apply-headerline ()
-  "Apply the current header line style to all buffers."
-  (cond
-    ((eq steven-headerline-style 'default)
-     (steven-headerline-default)
-     (steven-apply-spacious-padding-minimal))
-    ((eq steven-headerline-style 'minimal)
-     (steven-headerline-minimal)
-     (steven-apply-spacious-padding-default)))
-
-  (dolist (buf (buffer-list))
-     (with-current-buffer buf
-       (kill-local-variable 'header-line-format)))
-   (force-mode-line-update t)
-   (redraw-display))
-
-(defun steven-apply-modeline ()
-  "Apply the current modeline style to all buffers."
-  (cond
-    ((eq steven-modeline-style 'default)
-     (steven-modeline-default))
-    ((eq steven-modeline-style 'minimal)
-     (steven-modeline-minimal))))
-
-;;; Toggle function
-(defun steven-toggle-headerline ()
-  "Toggle between default and minimal header line styles."
-  (interactive)
-  (setq steven-headerline-style
-        (if (eq steven-headerline-style 'default)
-            'minimal
-          'default))
+(use-package setup-modeline
+  :demand t ;;make sure it always load and config is ran
+  :bind (("<f10>" . steven-toggle-headerline)
+         ("<f8>" . steven-toggle-modeline))
+  :hook ((doric-themes-after-load-theme . steven--doric-headerline-faces)
+         (modus-themes-after-load-theme . steven--modus-headerline-faces))
+  :config
+  (setq steven-modeline-style 'default
+        steven-headerline-style 'default)
   (steven-apply-headerline)
-  (message "Headerline style: %s"
-           steven-headerline-style))
+  (steven-apply-modeline))
 
-(defun steven-toggle-modeline ()
-  "Toggle between default and minimal modeline styles."
-  (interactive)
-  (setq steven-modeline-style
-        (if (eq steven-modeline-style 'default)
-            'minimal
-          'default))
-  (steven-apply-modeline)
-  (message "Modeline style: %s"
-           steven-modeline-style))
-
-(setq steven-modeline-style 'default)
-(setq steven-headerline-style 'default)
-(steven-apply-headerline)
-(steven-apply-modeline)
-(global-set-key (kbd "<f10>") #'steven-toggle-headerline)
-(global-set-key (kbd "<f8>") #'steven-toggle-modeline)
-
-(defun steven--modus-headerline-faces (&rest _)
-  (modus-themes-with-colors
-    (custom-set-faces
-     `(mode-line-active ((t :underline nil
-                            :overline ,fg-main
-                            :foreground ,fg-main
-                            :box nil
-                            :background ,bg-mode-line-inactive
-                            :height 1.0)))
-     `(mode-line-inactive ((t :underline nil
-                              :overline ,fg-main
-                              :foreground ,bg-main
-                              :box nil
-                              :background ,bg-main
-                              :height 1.0)))
-     `(mode-line-maker-padding-face ((t 
-                              :underline nil
-                              :foreground ,bg-main
-                              :box nil
-                              :background ,bg-main)))
-     `(header-line ((t 
-                            :foreground ,fg-mode-line-active
-                            :background ,bg-mode-line-active
-                            :box (:line-width 1 :color ,fg-mode-line-active))))
-     `(header-line-inactive ((t 
-                            :foreground ,fg-mode-line-inactive
-                            :background ,bg-mode-line-inactive
-                            :box (:line-width 1 :color ,fg-mode-line-inactive))))
-     `(header-line-status ((t 
-                            :foreground ,fg-mode-line-active
-                            :background ,bg-hl-line
-                            :box (:line-width 1 :color ,fg-mode-line-active))))
-     `(header-line-status-inactive ((t 
-                            :foreground ,fg-mode-line-inactive
-                            :background ,bg-mode-line-inactive
-                            :box (:line-width 1 :color ,fg-mode-line-inactive))))
-     )))
-
-(defun steven--doric-headerline-faces (&rest _)
-  (doric-themes-with-colors
-    (custom-set-faces
-     `(mode-line-active ((t :underline nil
-                            :overline ,fg-main
-                            :foreground ,fg-main
-                            :box nil
-                            :background ,bg-shadow-subtle
-                            :height 1.0)))
-     `(mode-line-inactive ((t :underline nil
-                              :overline ,bg-main
-                              :foreground ,bg-main
-                              :box nil
-                              :background ,bg-main
-                              :height 1.0)))
-     `(mode-line-maker-padding-face ((t 
-                         :underline nil
-                         :foreground ,bg-main
-                         :box nil
-                         :background ,bg-main)))
-     `(steven-header-line ((t 
-                            :foreground ,fg-main
-                            :background ,bg-shadow-subtle
-                            :box (:line-width 1 :color ,fg-main))))
-     `(steven-header-line-inactive ((t 
-                            :foreground ,fg-shadow-subtle
-                            :background ,bg-main
-                            :box (:line-width 1 :color ,fg-shadow-subtle))))
-     `(header-line ((t 
-                            :foreground ,fg-main
-                            :background ,bg-shadow-subtle
-                            :box (:line-width 1 :color ,fg-main))))
-     `(header-line-inactive ((t 
-                            :foreground ,bg-neutral
-                            :background ,bg-main
-                             :box (:line-width 1 :color ,fg-shadow-subtle))))
-     `(header-line-status ((t 
-                            :foreground ,fg-main
-                            :background ,bg-shadow-intense
-                            :box (:line-width 1 :color ,fg-main))))
-     `(header-line-status-inactive ((t 
-                            :foreground ,fg-shadow-subtle
-                            :background ,bg-shadow-subtle
-                            :box (:line-width 1 :color ,fg-shadow-subtle))))
-     )))
-
-;(add-hook 'modus-themes-after-load-theme-hook #'steven--modus-nano-faces)
-
-;(remove-hook 'doric-themes-after-load-theme-hook
-;          #'steven--doric-themes-custom-faces)
-(add-hook 'doric-themes-after-load-theme-hook
-          #'steven--doric-headerline-faces)
-
-
-;(remove-hook 'modus-themes-after-load-theme-hook
-;          #'steven--modus-themes-custom-faces)
-(add-hook 'modus-themes-after-load-theme-hook
-          #'steven--modus-headerline-faces)
-
-(doric-themes-load-theme 'doric-oak)
-
-(doric-themes-load-theme 'doric-oak)
+(use-package theme-extras
+  :demand t
+  :config
+  (doric-themes-load-theme 'doric-oak))
 
 (defvar steven--context-var nil
   "Buffer-local context variable set via dir-locals, this is purely for the
@@ -737,6 +402,36 @@ Can be either 'default or 'minimal.")
 (setq initial-major-mode 'lisp-interaction-mode)
 (setq initial-scratch-message  ";; -*- lexical-binding: t; -*-\n")
 
+(use-package scratch
+  :ensure t
+  :config
+  (defun my/scratch-buffer-setup ()
+    "Add contents to `scratch' buffer and name it accordingly.
+If region is active, add its contents to the new buffer."
+    (unless (derived-mode-p
+             'text-mode 'prog-mode 'conf-mode 'tex-mode)
+      (condition-case nil
+          (let ((pick
+                 (read-multiple-choice
+                  "Switch major mode?"
+                  '((?o "org") (?m "markdown")
+                    (?l "lisp-interaction") (?e "elisp")
+                    (?  "Continue")))))
+            (pcase (car pick)
+              (?o (org-mode)) (?m (markdown-mode))
+              (?l (lisp-interaction-mode)) (?e (emacs-lisp-mode)))
+            (read-only-mode 0))
+        (quit nil)))
+    (when (derived-mode-p 'emacs-lisp-mode)
+      (message "Auto-switching to `lisp-interaction-mode'")
+      (lisp-interaction-mode))
+    (let* ((mode major-mode))
+      (rename-buffer (format "*Scratch for %s*" mode) t)))
+  (setf (alist-get "\\*Scratch for" display-buffer-alist nil nil #'equal)
+        '((display-buffer-same-window)))
+  :hook (scratch-create-buffer . my/scratch-buffer-setup)
+  :bind ("C-c s" . scratch))
+
 (setq default-input-method "latin-prefix")
 (setq-default fill-column 78)
 
@@ -758,6 +453,14 @@ Can be either 'default or 'minimal.")
   (setq colon-double-space nil)
   (setq use-hard-newlines nil)
   (setq adaptive-fill-mode t))
+
+(use-package text-extras
+  :bind
+  (("C-v" . steven-scroll-down-quarter-screen)
+   ("M-v" . steven-scroll-up-quarter-screen)
+   ("M-q" . steven-cycle-paragraph)
+   :map org-mode-map
+   ("<f6>" . OSPV-mode)))
 
 (use-package visual-fill-column
   :ensure t)
@@ -837,90 +540,6 @@ Can be either 'default or 'minimal.")
                (window-width . 0.4    )
                (dedicated . t)))
 
-(defun my-unfill-paragraph ()
-  "Replace newline chars in current paragraph by single spaces.
-This command does the inverse of `fill-paragraph'"
-  (interactive)
-  (let ((fill-column most-positive-fixnum))
-    (fill-paragraph)))
-
-(defun my-fill-paragraph-semlf-long ()
-  (interactive)
-  (let ((fill-column most-positive-fixnum))
-    (fill-paragraph-semlf)))
-
-;; It might be nice to figure out what state we're in and then cycle to the next one if we're just working with a single paragraph. In the meantime, just going by repeats is fine.
-(defvar my-cycle-functions
-  '(fill-paragraph
-    my-unfill-paragraph
-    my-fill-paragraph-semlf-long)
-  "Functions to cycle through.")
-
-(defvar my-cycle-index 0
-  "Current position in `my-cycle-functions`.")
-
-(defun my-cycle-paragraph ()
-  "Cycle through paragraph formatting functions on repeated calls."
-  (interactive)
-  (unless (eq last-command this-command)
-    (setq my-cycle-index 0))
-  (let ((fn (nth my-cycle-index my-cycle-functions)))
-    (when fn
-      (call-interactively fn)
-      (message "Ran: %s" fn)))
-  (setq my-cycle-index
-        (mod (1+ my-cycle-index)
-             (length my-cycle-functions))))
-
-(keymap-global-set "M-q" #'my-cycle-paragraph)
-
-(defun steven-org-content-start ()
-  "Return position after Org front matter (#+ lines)."
-  (save-excursion
-    (goto-char (point-min))
-    (while (looking-at-p "^#\\+")
-      (forward-line 1))
-    (point)))
-
-(defun steven-unfill-buffer ()
-  "Unfill the buffer, excluding Org front matter."
-  (interactive)
-  (let ((fill-column most-positive-fixnum))
-    (fill-region (steven-org-content-start) (point-max))))
-
-(defun steven-fill-buffer-semlf ()
-  "Apply `fill-paragraph-semlf` to all paragraphs after front matter."
-  (interactive)
-  (save-excursion
-    (let ((fill-column most-positive-fixnum))
-      (goto-char (steven-org-content-start))
-      (while (< (point) (point-max))
-        ;; Skip headings and empty lines
-        (cond
-         ((org-at-heading-p)
-          (forward-line 1))
-         ((looking-at-p "^\\s-*$")
-          (forward-line 1))
-         (t
-          ;; Now we're in actual paragraph content
-          (fill-paragraph-semlf)
-          (forward-paragraph 1)))))))
-
-(define-minor-mode OSPV-mode
-  "One Sentence Per Visual-line mode (Org buffers only)."
-  :lighter " OSPV"
-  (unless (derived-mode-p 'org-mode)
-    (user-error "OSPV-mode only works in org-mode"))
-  (if OSPV-mode
-      (steven-fill-buffer-semlf)
-    (steven-unfill-buffer)))
-
-;; Set to t (non-nil) when entering org, not toggle DO NOT turn this on globablly, only in /Notes via .dir-locals
-;(add-hook 'org-mode-hook (lambda () (OSPV-mode t)))
-
-(with-eval-after-load 'org
-  (define-key org-mode-map (kbd "<f6>") #'OSPV-mode))
-
 (use-package delsel
   :ensure nil
   :hook (after-init . delete-selection-mode))
@@ -967,6 +586,18 @@ This command does the inverse of `fill-paragraph'"
     (setq delete-by-moving-to-trash t)
     (setq dired-dwim-target t)
     (setq dired-listing-switches "-alh --group-directories-first")
+    (defun steven--dired-layout ()
+       "Custom behaviors for dired layout."
+       (setq truncate-lines t))
+    (add-hook 'dired-mode-hook #'steven--dired-layout t)
+    (defun steven--dired-rename-buffer ()
+      "Rename Dired buffers to their directory name."
+      (when (derived-mode-p 'dired-mode)
+        (rename-buffer
+         (abbreviate-file-name
+          (expand-file-name dired-directory))
+         t)))
+    ;(add-hook 'dired-mode-hook #'steven--dired-rename-buffer)
     (use-package dired-x
        :ensure nil  ;; also built-in
        :config
@@ -976,56 +607,7 @@ This command does the inverse of `fill-paragraph'"
              "\\|^\\.stfolder$"
              "\\|^\\.localized$"))))
 
-(defun steven--dired-layout ()
-  "Custom behaviors for dired layout."
-  ;; First remove the entire header line:
-  ;(save-excursion
-  ;  (goto-char (point-min))
-  ;  (put-text-property
-  ;   (line-beginning-position)
-  ;   (1+ (line-end-position))
-  ;   'invisible t))
-  ;;truncate-lines is buffer local, so can be safely changed
-  (setq truncate-lines t))
-
-
-;; The following appends it to the hook list at the end
-(add-hook 'dired-mode-hook #'steven--dired-layout t)
-
-(defun steven--dired-rename-buffer ()
- "Rename Dired buffers to their directory name."
-  (when (derived-mode-p 'dired-mode)
-    (rename-buffer
-     (abbreviate-file-name
-      (expand-file-name dired-directory))
-     t)))
-
-;(add-hook 'dired-mode-hook #'steven--dired-rename-buffer)
-
-(defvar steven-dired--limit-hist '()
-  "Minibuffer history for `steven-dired-limit-regexp'.")
-
-;; Function from Prot:
-(defun steven-dired-limit-regexp (regexp omit)
-  "Limit Dired to keep files matching REGEXP.
-
-With optional OMIT argument as a prefix (\\[universal-argument]),
-exclude files matching REGEXP.
-
-Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
-  (interactive
-   (list
-    (read-regexp
-     (concat "Files "
-             (when current-prefix-arg
-               (propertize "NOT " 'face 'warning))
-             "matching PATTERN: ")
-     nil 'steven-dired--limit-hist)
-    current-prefix-arg))
-  (dired-mark-files-regexp regexp)
-  (unless omit (dired-toggle-marks))
-  (dired-do-kill-lines)
-  (add-to-history 'steven-dired--limit-hist regexp))
+(use-package dired-extras)
 
 (use-package dired-subtree
   :ensure t
@@ -1060,20 +642,6 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
                   "epub"
                   "\\)")))
 
-(defun steven-dired-here-side-left ()
-  "Open Dired for current buffer's directory in a left side window."
-  (interactive)
-  (let* ((dir (or (and (buffer-file-name)
-                       (file-name-directory (buffer-file-name)))
-                  default-directory))
-         (buffer (dired-noselect dir)))
-    (display-buffer
-     buffer
-     '((display-buffer-in-direction)
-      (direction . left)
-      (window-width . 0.25)) 
-                                )))
-
 (use-package colorful-mode
   ;; :diminish
   :ensure t ; Optional
@@ -1086,45 +654,11 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   (global-colorful-mode t)
   (add-to-list 'global-colorful-modes 'helpful-mode))
 
-(defvar steven--current-language 'english
-  "Current system language.")
-
-(defun steven--apply-language-settings ()
-  "Apply settings for `my/current-language`."
-  (pcase steven--current-language
-
-    ('english
-     ;; Spell checking
-     (ispell-change-dictionary "en_GB")
-     (setq wiktionary-bro-language "en")
-     ;; Example future settings:
-     ;; (setq some-var ...)
-     ;; (setenv "LANG" "en_US.UTF-8")
-
-     (message "Language set to English"))
-
-    ('dutch
-     ;; Spell checking
-     (ispell-change-dictionary "nl_NL")
-     (setq wiktionary-bro-language "nl")
-     ;; Example future settings:
-     ;; (setq some-var ...)
-     ;; (setenv "LANG" "nl_NL.UTF-8")
-
-     (message "Language set to Dutch"))))
-
-(defun steven-toggle-language ()
-  "Toggle between English and Dutch."
-  (interactive)
-  (setq steven--current-language
-        (if (eq steven--current-language 'english)
-            'dutch
-          'english))
-
+(use-package setup-language
+  :bind ("C-<f7>" . steven-toggle-language)
+  :hook (text-mode . steven--apply-language-settings)
+  :config
   (steven--apply-language-settings))
-
-(steven--apply-language-settings)
-(bind-key "C-<f7>" #'steven-toggle-language)
 
 ;; Set the default server to dict.org (avoids prompting each time)
 (setq dictionary-server "dict.org")
@@ -1142,41 +676,27 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   :ensure t)
 
 ;; Use Hunspell as the spell-checker
-(when (executable-find "hunspell")
-  (setq-default ispell-program-name "hunspell")
-  (setq ispell-really-hunspell t))
+(use-package ispell
+  :ensure nil
+  :custom
+  (ispell-dictionary "nl_NL")
+  (flyspell-default-dictionary "nl_NL")
+  (ispell-local-dictionary-alist
+   '(("en_GB" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_GB") nil utf-8)
+     ("nl_NL" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "nl_NL") nil utf-8)))
+  :config
+  (when (executable-find "hunspell")
+    (setq-default ispell-program-name "hunspell")
+    (setq ispell-really-hunspell t)))
 
-(with-eval-after-load 'flyspell
-  (define-key flyspell-mode-map (kbd "C-.") nil))
-
-;; Default to Dutch
-(setq ispell-dictionary "nl_NL")
-(setq flyspell-default-dictionary "nl_NL")
-
-;; Tell Emacs where to find the dictionaries (optional if auto-detected)
-(setq ispell-local-dictionary-alist
-      '(("en_GB" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_GB") nil utf-8)
-        ("nl_NL" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "nl_NL") nil utf-8)))
-
+(use-package flyspell
+  :ensure nil
+  ;:hook (text-mode . flyspell-mode)
+  :bind
+  ("<f7>" . flyspell-mode)
+  (:map flyspell-mode-map
+   ("C-." . nil)))
 ;(add-hook 'text-mode-hook 'flyspell-mode)
-
-;obsolete
-(defun steven-toggle-spell-language ()
-  "Toggle between English and Dutch Hunspell dictionaries."
-  (interactive)
-  (let ((current-dict ispell-current-dictionary))
-    (cond
-     ((string= current-dict "en_GB")
-      (ispell-change-dictionary "nl_NL")
-      (message "Switched dictionary to Dutch (nl_NL)"))
-     ((string= current-dict "nl_NL")
-      (ispell-change-dictionary "en_GB")
-      (message "Switched dictionary to English (en_GB)"))
-     (t
-      (ispell-change-dictionary "en_GB")
-      (message "Defaulted dictionary to English (en_GB)")))))
-
-(bind-key "<f7>" #'flyspell-mode)
 
 (with-eval-after-load 'org
   (setq org-confirm-babel-evaluate nil)
@@ -1364,25 +884,6 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
                     :description (cadar (org-collect-keywords '("TITLE")))))))
           )))))
 
-(defun log-todo-next-creation-date (&rest ignore)
-  "Log NEXT creation time in the property drawer under the key 'ACTIVATED'"
-  (when (and (string= (org-get-todo-state) "NEXT")
-             (not (org-entry-get nil "ACTIVATED")))
-    (org-entry-put nil "ACTIVATED" (format-time-string "[%Y-%m-%d]"))))
-(add-hook 'org-after-todo-state-change-hook #'log-todo-next-creation-date)
-
-;; Experimenting with styling my own org note blocks
-(defface steven-org-note-face
-  '((t (:background "#2a2a2a"
-        :foreground "#dcdccc"
-        :extend t)))
-  "Face for note blocks.")
-
-(font-lock-add-keywords
- 'org-mode
- '(("^#\\+begin_note" 0 'steven-org-note-face t)
-   ("^#\\+end_note" 0 'steven-org-note-face t)))
-
 (use-package org-modern
   :ensure t
   :after org
@@ -1483,43 +984,12 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
 
 (setq org-export-directory "Exports")
 
-(defun org-publish-attachment-resize (_plist filename pub-dir)
-  "Publish a resource and resize it afterwards."
-  (org-publish-attachment _plist filename pub-dir)
-  (if (executable-find "magick")
-      (let* ((target (expand-file-name (file-name-nondirectory filename) pub-dir)))
-        (call-process "magick" nil nil nil
-                      target
-                      "-resize" "x350>"
-                      target))
-    (message "Magick not found; images not resized.")))
-
 (use-package ox-publish
   :after org)
 
-(defun steven-recipebook-mkdocs-build ()
-  "Run mkdocs build as an async shell command"
-  (interactive)
-  (let ((default-directory "~/web/recipebook-org/"))
-    (async-shell-command
-     "source .venv/bin/activate && mkdocs build"
-     "*mkdocs build*")))
+(use-package mkdocs-extras)
 
-(defun steven-recipebook-mkdocs-build-shell ()
-  "Run mkdocs build in a interactive shell"
-  (interactive)
-  (let ((default-directory "~/web/recipebook-org/"))
-    (shell "*mkdocs-shell*")
-    (comint-send-string "*mkdocs-shell*"
-                        "source .venv/bin/activate && mkdocs build\n")))
-
-(defun steven-recipebook-mkdocs-serve ()
-  "Run mkdocs serve as an async shell commaned"
-  (interactive)
-  (let ((default-directory "~/web/recipebook-org/"))
-    (async-shell-command
-     "source .venv/bin/activate && mkdocs serve"
-     "*mkdocs serve*")))
+(use-package setup-export)
 
 (use-package expand-region
   :ensure t
@@ -1723,7 +1193,7 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
 (use-package steven-denote-extras)
 
 (use-package consult-denote
-  :vc (:url "https://github.com/protesilaos/consult-denote")
+  :vc (:url "https://github.com/protesilaos/consult-denote"  :rev :newest)
   :bind
   (("C-c n f" . consult-denote-find)
    ("C-c n g" . consult-denote-grep))
@@ -1973,12 +1443,12 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   (:map embark-identifier-map
         ("m" . center-line) ;c is taken by capatilize. m for middle
         ("d" . dictionary-search)
-        ("w" . wiktionary-bro)
-        ("e" . steven-gptel-lookup)) ;etmology search with gptel
+        ("w" . wiktionary-bro))
+        ;("e" . steven-gptel-lookup)) ;etmology search with gptel
   (:map embark-region-map
         ("m" . center-region) ; m for middle
-        ("=" . quick-calc)
-        ("x" . steven-gptel-prompt-and-respond))
+        ("=" . quick-calc))
+        ;("x" . steven-gptel-prompt-and-respond))
   (:map embark-file-map
         ("L" . load-file)
         ("C" . steven-embark-copy-file-or-directory)) ;from embark-extras
@@ -2255,71 +1725,12 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
 ;; Bind Beframe commands to a prefix key, such as C-c b:
 (define-key global-map (kbd "C-x C-b") #'beframe-prefix-map)
 
-(defun steven--get-frame-by-name (name)
-  "Return frame with NAME or nil."
-  (seq-find
-   (lambda (frame)
-     (string= (frame-parameter frame 'name) name))
-   (frame-list)))
-
-(defun steven--get-or-create-frame (name)
-  "Return (FRAME . CREATED-P)."
-  (let ((frame (steven--get-frame-by-name name)))
-    (if frame
-        (cons frame nil)
-      (cons (make-frame `((name . ,name))) t))))
-
-(defun steven-switch-to-home-frame ()
-  "Switch to the frame named \"home\"."
-  (interactive)
-  (let ((frame (seq-find
-                (lambda (f)
-                  (string= (frame-parameter f 'name) "Home"))
-                (frame-list))))
-    (when frame
-      (select-frame-set-input-focus frame))))
-
-(global-set-key (kbd "C-c f h") #'steven-switch-to-home-frame)
-
-(defun steven-switch-to-wiki-frame ()
-  "Switch to Wiki frame; create it if missing, and only initialize once."
-  (interactive)
-  (pcase-let ((`(,frame . ,created)
-               (steven--get-or-create-frame "Wiki")))
-
-    
-    (select-frame-set-input-focus frame)
-    (set-frame-name "Wiki")    
-    ;; Only initialize on creation
-    (when created
-      (with-selected-frame frame
-        (dired "~/Documents/Wiki/")))))
-
-(defun steven-select-frame ()
-  "Select a frame from a list of existing frames."
-  (interactive)
-  (let* ((frames (frame-list))
-         (names (mapcar (lambda (f)
-                          (cons (frame-parameter f 'name) f))
-                        frames))
-         (choice (completing-read "Frame: " (mapcar #'car names)))
-         (frame (cdr (assoc choice names))))
-    (when frame
-      (select-frame-set-input-focus frame))))
-
-(global-set-key (kbd "C-c f s") #'steven-select-frame)
-
-(bind-key "C-c f w" #'steven-switch-to-wiki-frame)
-;(bind-key "C-c n w" #'steven-search-in-wiki)
-
-;; C-x o → switch to other window (standard, but you asked for frame behavior)
-(global-set-key (kbd "C-x o") #'other-frame)
-
-;; M-o → switch to other window
-(global-set-key (kbd "M-o") #'other-window)
+(use-package frame-extras
+  :bind (("C-c f s" . steven-select-frame)
+         ("C-c f h" . steven-switch-to-home-frame)
+         ("C-c f w" . steven-switch-to-wiki-frame)))
 
 ;;; Standard Unix Shell (M-x shell)
-
 
 ;; Check Prots .bashrc which handles `comint-terminfo-terminal':
 ;;
@@ -2409,45 +1820,9 @@ Otherwise rename to:
    (define-key notmuch-show-mode-map (kbd "a")
       #'steven/notmuch-show-archive-and-next))
 
-(defun steven/notmuch-archive-and-mark-read ()
-    "Archive the current message and remove the unread tag."
-    (interactive)
-    ;; In notmuch, 'archive' simply means removing the 'inbox' tag.
-    (notmuch-search-remove-tag '("-inbox" "-unread")))
-
-(defun steven/notmuch-show-archive-and-next ()
-    "Archive + mark read, then go to next message without recentering."
-    (interactive)
-    (let ((inhibit-read-only t)
-          (winstart (window-start)))
-      (notmuch-show-remove-tag '("-inbox" "-unread"))
-      (notmuch-show-next-message)
-      ;; prevent recentering jump
-      (set-window-start (selected-window) winstart t)))
-
 (use-package ol-notmuch
   :ensure t
   :after notmuch)
-
-(defun my-notmuch-bookmark-jump (bookmark)
-  "Jump to a notmuch saved search bookmark."
-  (let ((search (bookmark-prop-get bookmark 'notmuch-search)))
-    (notmuch-search search)))
-
-(defun my-notmuch-bookmark-set ()
-  "Set a bookmark for the current notmuch search buffer."
-  (interactive)
-  (unless (derived-mode-p 'notmuch-search-mode)
-    (user-error "Not in a notmuch search buffer"))
-  (let* ((name (read-string "Bookmark name: "))
-         ;; Evaluate the variable, don't quote it
-         (search notmuch-search-query-string)
-         ;; Build the bookmark record
-         (bookmark (list (cons 'notmuch-search search)
-                         (cons 'handler #'my-notmuch-bookmark-jump))))
-    ;; Store it properly
-    (bookmark-store name bookmark nil)
-    (message "Stored notmuch search bookmark: %s (%s)" name search)))
 
 ;;; Interactive and powerful git front-end (Magit)
 (use-package transient
@@ -2476,22 +1851,7 @@ Otherwise rename to:
   (with-eval-after-load 'magit
     (setq magit-format-file-function #'magit-format-file-nerd-icons)))
 
-(defun steven-magit-add-all-and-commit ()
-  "Run git add -A and start a Magit commit."
-  (interactive)
-  (require 'magit)
-
-  (unless (magit-toplevel)
-    (user-error "Not inside a Git repository"))
-
-  ;; Equivalent to: git add -A
-  (magit-call-git "add" "-A")
-
-  ;; Refresh Magit status if open
-  (magit-refresh)
-
-  ;; Open commit buffer
-  (magit-commit-create))
+(use-package magit-extras)
 
 (setq auto-revert-interval 1)
 (global-auto-revert-mode 1)
@@ -2501,48 +1861,20 @@ Otherwise rename to:
     :ensure t
     :config
     (pdf-tools-install)
-
     (add-hook 'pdf-view-mode-hook #'auto-revert-mode)))
 
-(require 'ox-latex)
-(global-set-key (kbd "<f1>") #'org-latex-export-to-pdf)
-;; Use pdflatex by default
-(setq org-latex-compiler "pdflatex")
-;; Should handle auto refresh, later I can setup an external viewer
-(setq TeX-view-program-selection '((output-pdf "PDF Tools")))
+(use-package ox-latex
+  :ensure nil
+  :bind ("<f1>" . org-latex-export-to-pdf)
+  :custom
+  (org-latex-compiler "pdflatex")
+  ;; set standard viewer to emacs pdf-tools
+  (TeX-view-program-selection '((output-pdf "PDF Tools"))))
 
-(defun steven-org-export-pdf ()
-  (interactive)
-  (org-latex-export-to-pdf)) ; t mean async export (not working)
-
-(defun steven-org-export-pdf-and-open-ext ()
-  (interactive)
-  (let ((output (org-latex-export-to-pdf)))
-    (when output
-      (org-open-file output))))
-
-(defun steven-org-export-pdf-and-open ()
-  (interactive)
-  (let ((output (org-latex-export-to-pdf)))
-    (when output
-      (let ((buf (find-file-noselect output)))
-        (with-current-buffer buf
-          (pdf-view-mode))
-        (switch-to-buffer-other-window buf)))))
-
-(setq pdf-view-midnight-colors
-        (cons (face-attribute 'default :foreground)
-              (face-attribute 'default :background)))
-
-(defun steven--pdf-set-dark-background ()
-  (interactive)
-  (if pdf-view-midnight-minor-mode
-      (pdf-view-midnight-minor-mode -1)
-    (pdf-view-midnight-minor-mode 1)))
-
-(global-set-key (kbd "C-c t l") #'steven--pdf-set-dark-background)
-(global-set-key (kbd "<f1>") #'steven-org-export-pdf)
-(global-set-key (kbd "C-<f1>") #'steven-org-export-pdf-and-open)
+(use-package pdf-extras
+  :bind (("C-c t l" . steven--pdf-set-dark-background)
+         ("<f1>" . steven-org-export-pdf)
+         ("C-<f1>" . steven-org-export-pdf-and-open)))
 
 (use-package gptel
   :vc ( :url "https://github.com/karthink/gptel"
@@ -2632,46 +1964,22 @@ Otherwise rename to:
   :config (gptel-agent-update))         ;Read files from agents directories
 
 (use-package gptel-extras
-  :after gptel
+  :after (gptel embark)
   :bind
+  (:map embark-identifier-map
+        ("e" . steven-gptel-lookup))
+  (:map embark-region-map
+        ("x" . steven-gptel-prompt-and-respond))
   (:map global-gptel-map
         ("b" . steven-gptel-switch-backend)
         ("e" . steven-gptel-lookup) ;etmology lookup
         ("p" . steven-gptel-prompt-and-respond)))
 
-(defvar center-document-desired-width 80
-  "The desired width of a document centered in the window.")
-
-(defun center-document--adjust-margins ()
-  ;; Reset margins first before recalculating
-  (set-window-parameter nil 'min-margins nil)
-  (set-window-margins nil nil)
-
-  ;; Adjust margins if the mode is on
-(when center-document-mode
-    (let ((margin-width (max 0
-                             (truncate
-                              (/ (- (window-width)
-                                    center-document-desired-width)
-                                 2.0)))))
-      (when (> margin-width 0)
-        (set-window-parameter nil 'min-margins '(0 . 0))
-        (set-window-margins nil margin-width margin-width)))))
-
-(define-minor-mode center-document-mode
-  "Toggle centered text layout in the current buffer."
-  :lighter " Centered"
-  :group 'editing
-  (if center-document-mode
-      (add-hook 'window-configuration-change-hook #'center-document--adjust-margins 'append 'local)
-    (remove-hook 'window-configuration-change-hook #'center-document--adjust-margins 'local))
-  (center-document--adjust-margins))
-
-;;small helper to adjust window after font change
-(defun center-document-refresh ()
-  (interactive)
-  (when center-document-mode
-    (center-document--adjust-margins)))
+(use-package center-document-mode
+  ;:hook ((org-mode . center-document-mode)
+  ;       (markdown-mode . center-document-mode)
+  ;       (text-mode . center-document-mode))
+  )
 
 (use-package show-font
   :ensure t)
