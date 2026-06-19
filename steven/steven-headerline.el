@@ -119,6 +119,9 @@ or nil."
        ;'face 'steven-header-line
        ))))
 
+
+;; Issue is that buffer-local language can differ from global language
+;; A solution is below.
 (defun steven--header-line-language ()
   "Return `steven--current-language' as \"EN \" or \"NL \"."
   (propertize
@@ -127,6 +130,15 @@ or nil."
                 ("dutch" . "NL "))
               nil nil #'string=)
    'face '(:weight bold)))
+
+;; (defun steven--header-line-language ()
+;;   "Return current ispell dictionary as a short language code."
+;;   (propertize
+;;    (pcase ispell-local-dictionary
+;;      ("en_GB" "EN ")
+;;      ("nl_NL" "NL ")
+;;      (_ ispell-local-dictionary))
+;;    'face '(:weight bold)))
 
 (defun steven-header-line-ispell-dict ()
   "Return an icon if Flyspell is active."

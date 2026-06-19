@@ -13,20 +13,19 @@
 (setq gc-cons-threshold most-positive-fixnum
       gc-cons-percentage 0.5)
 
-;; Same idea as above for the `file-name-handler-alist' and the `vc-handled-backends' with regard to startup speed optimisation.
+;; Same idea as above for the `file-name-handler-alist' with regard to startup speed optimisation.
 ;; Here I am storing the default value with the intent of restoring it via the `emacs-startup-hook'.
+;; NOTE: vc-handled-backends is intentionally left alone — setting it to nil breaks package-vc
+;; which needs the Git backend available during init when installing :vc packages.
 (defvar steven-emacs--file-name-handler-alist file-name-handler-alist)
-(defvar steven-emacs--vc-handled-backends vc-handled-backends)
 
-(setq file-name-handler-alist nil
-      vc-handled-backends nil)
+(setq file-name-handler-alist nil)
 
 (add-hook 'emacs-startup-hook
           (lambda ()
             (setq gc-cons-threshold (* 100 100 8)
                   gc-cons-percentage 0.1
-                  file-name-handler-alist steven-emacs--file-name-handler-alist
-                  vc-handled-backends steven-emacs--vc-handled-backends)))
+                  file-name-handler-alist steven-emacs--file-name-handler-alist)))
 
 (setq frame-resize-pixelwise t
       frame-inhibit-implied-resize 'force

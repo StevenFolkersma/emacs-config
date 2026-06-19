@@ -1,4 +1,4 @@
-+title: Steven's Emacs configuration
+#+title: Steven's Emacs configuration
 #+author: Steven Folkersma
 #+language: en
 #+startup: content
@@ -359,15 +359,19 @@ Some settings from the NANO config (I use prot's code for modifying C-g, which i
 (bind-key "C-x C-m" #'execute-extended-command)
 (bind-key "C-c C-m" #'execute-extended-command)
 (bind-key "C-x m" nil)
+
+;; One my annoyances
+(with-eval-after-load 'elisp-mode
+  (keymap-unset emacs-lisp-mode-map "C-c b"))
 #+end_src
 
-** The =init.el= section on scrolling behaviour
+** TODO The =init.el= section on scrolling behaviour
 
 Attempting to make scrolling more smooth. The custom ’scroll half a screen’ commands were copied from Prot, but it does not behave well in org document with folded headings.
 
 #+begin_src emacs-lisp :tangle "init.el"
 (setq scroll-conservatively 101 ; affects `scroll-step'
-      scroll-margin 0
+      scroll-margin 3
       auto-window-vscroll t
       scroll-preserve-screen-position t)
 
@@ -391,6 +395,22 @@ Attempting to make scrolling more smooth. The custom ’scroll half a screen’ 
 (defun steven-scroll-up-quarter-screen ()
   (interactive)
   (scroll-down-command (steven-scroll--quarter-screen-lines)))
+
+(defun my-recenter-after-jump (window new-win-start)
+  "Recenter the point after a non-scroll command brings it out of view.
+This function is meant to be called from the hook ‘window-scroll-functions’."
+  (interactive)
+  (with-selected-window window
+    (let* ((new-start-line (line-number-at-pos new-win-start))
+           (old-start-line (or (bound-and-true-p last-start-line-memo)
+                               (line-number-at-pos (point))))
+           (distance (abs (- old-start-line new-start-line))))
+      (when (and (> distance 5)
+                 (not isearch-mode)
+                 (not (get last-command 'scroll-command)))
+        (recenter))
+      (setq-local last-start-line-memo new-start-line))))
+(add-hook 'window-scroll-functions #'my-recenter-after-jump)
 
 (global-set-key (kbd "C-v") #'steven-scroll-down-quarter-screen)
 (global-set-key (kbd "M-v") #'steven-scroll-up-quarter-screen)
@@ -757,7 +777,7 @@ overwritten if *:header-line-width* is non-zero.
 ;(define-key global-map (kbd "<f8>") #'spacious-padding-mode)
 #+end_src
 
-** The =init.el= section to setup the modeline
+** TODO The =init.el= section to setup the modeline
 I use a custom modeline, for which all the backend technicalities are
 set in [[*The =steven-modeline.el= section][The =steven-modeline.el= section]]. Here I just
 setup the defaults and a toggle function.
@@ -1222,7 +1242,7 @@ If region is active, add its contents to the new buffer."
   :bind ("C-c s" . scratch))
 #+end_src
 
-** The =init.el= section on text styling and input
+** TODO The =init.el= section on text styling and input
 
 This section sets how text is shown in emacs. 
 
@@ -1266,34 +1286,6 @@ using C-x 8.
   (setq colon-double-space nil)
   (setq use-hard-newlines nil)
   (setq adaptive-fill-mode t))
-
-(defun increase-region-font-size (start end &optional factor)
-  "Increase the font size of the text in the region by FACTOR (default 1.5). 
-   Applies a relative height text property to the selected region."
-  (interactive "r")
-  (let ((factor (or factor 1.5)))
-    (with-silent-modifications
-      (add-text-properties start end '(face (:height 1.5))))))
-
-(defun decrease-region-font-size (start end &optional factor)
-  "Decrease the font size of the text in the region by FACTOR (default 0.75). 
-   Applies a relative height text property to the selected region."
-  (interactive "r")
-  (let ((factor (or factor 0.75)))
-    (with-silent-modifications
-      (add-text-properties start end '(face (:height 0.75))))))
-
-(defun reset-region-font-size (start end)
-  "Remove custom font size from the region"
-  (interactive "r")
-  (with-silent-modifications
-      (remove-text-properties start end '(face nil))))
-
-(global-set-key (kbd "C-c +") 'increase-region-font-size)
-(global-set-key (kbd "C-c -") 'decrease-region-font-size)
-(global-set-key (kbd "C-c 0") 'reset-region-font-size)
-
-;;(add-hook 'text-mode-hook 'visual-line-mode) (add-hook 'text-mode-hook 'visual-wrap-prefix-mode)
 #+end_src
 
 ** TODO The =init.el= section taking care of visual-line-mode
@@ -1399,7 +1391,7 @@ Check [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Buffer-Display
                (dedicated . t)))
 #+end_src
 
-** The =init.el= setting on semantic lines
+** TODO The =init.el= setting on semantic lines
 
 This code is copied from: [[https://sachachua.com/blog/2025/09/emacs-cycle-through-different-paragraph-formats-all-on-one-line-wrapped-max-one-sentence-per-line-one-sentence-per-line/][Emacs: Cycle through different paragraph formats: all on one line, wrapped, m...]]
 #+begin_src emacs-lisp :tangle "init.el"
@@ -1568,7 +1560,7 @@ though I prefer to have them as a prefix so as not to interfere with
 what I am typing.
   
 
-** The =init.el= setup of dired
+** TODO The =init.el= setup of dired
 
 - I turn on hide details because I dont need info on permission etc., it can be toggled when needed.
 - hl-line-mode: this makes the current line always highlighted
@@ -1767,7 +1759,7 @@ current file. I do not use this at the moment.
 
 #+end_src
 
-** This =init.el= section on languages 
+** TODO This =init.el= section on languages 
 
 I am creating my own mode to set the ’system language’. It should set
 the following default:
@@ -1786,7 +1778,7 @@ the following default:
 
     ('english
      ;; Spell checking
-     (setq ispell-change-dictionary "en_GB")
+     (ispell-change-dictionary "en_GB")
      (setq wiktionary-bro-language "en")
      ;; Example future settings:
      ;; (setq some-var ...)
@@ -1796,7 +1788,7 @@ the following default:
 
     ('dutch
      ;; Spell checking
-     (setq ispell-change-dictionary "nl_NL")
+     (ispell-change-dictionary "nl_NL")
      (setq wiktionary-bro-language "nl")
      ;; Example future settings:
      ;; (setq some-var ...)
@@ -1814,10 +1806,11 @@ the following default:
 
   (steven--apply-language-settings))
 
+(steven--apply-language-settings)
 (bind-key "C-<f7>" #'steven-toggle-language)
 #+end_src
 
-** The =init.el= setup of the dictionary
+** TODO The =init.el= setup of the dictionary
 
 - The gcide dictionary specifically pulls from Webster's 1913 content. If you omit the dictionary-default-dictionary setting, you'll get results from all available dictionaries on dict.org (including Webster's).
 
@@ -1854,7 +1847,7 @@ I am  with some tools:
   :ensure t)
 #+end_src
 
-** The =init.el= section to setup spell-checking
+** TODO The =init.el= section to setup spell-checking
 
 For spell checking I use hunspell, both for Linux (dnf) and macOS
 (brew). Dutch and English spelling libraries need to be added. Current
@@ -1937,7 +1930,7 @@ This fixes the annoying tab behaviour in code blocks, from Prots setup
   (setq org-edit-src-content-indentation 0))
 #+end_src
 
-** The =init.el= to relocate auto-save files
+** TODO The =init.el= to relocate auto-save files
 
 Normally auto-save files (which I find usefull) are saved in the same folder as the edited file. This then also shows up in consult-find, fd and grep, which is annoying. Now they are stored in a given folder.
 
@@ -1952,7 +1945,7 @@ Need to check
 
 #+end_src
 
-** The =init.el= section on repeat mode
+** TODO The =init.el= section on repeat mode
 
 The ~repeat-mode~ is designed to find when a "repeatable" command is
 called and arrange so that it can be called again with single key
@@ -2084,6 +2077,127 @@ Org refiling is set like this, so I see the full path of the outline. To deal wi
       1) ("projects.org" :maxlevel .
       2))) (setq org-refile-use-outline-path 'file) (setq org-outline-path-complete-in-steps nil)
 #+end_src
+
+
+
+#+begin_src emacs-lisp :tangle "init.el"
+      ;;; Org-mode (personal information manager)
+(use-package org
+    :ensure nil
+    ;;:init
+    ;;(add-to-list 'safe-local-variable-values '(org-hide-leading-stars . t))
+    ;;(add-to-list 'safe-local-variable-values '(org-hide-macro-markers . t))
+    :bind
+    ( :map global-map
+      ("C-c l" . org-store-link)
+      ("C-c a" . org-agenda)
+      ("C-c o" . org-open-at-point-global)
+      :map org-mode-map
+      ;; I don't like that Org binds one zillion keys, so if I want one
+      ;; for something more important, I disable it from here.
+      ("C-c M-l" . org-insert-last-stored-link)
+      ("C-c C-M-l" . org-toggle-link-display)
+      ("C-'" . nil) ;using this for completion-at-point
+      ("C-," . nil)
+      ("C-c C-b" . nil) ;using this to switch buffer
+      ;("M-." . org-edit-special) ; alias for C-c ' (mnenomic is global M-. that goes to source)
+      :map org-src-mode-map
+      ("M-," . org-edit-src-exit) ; see M-. above
+      :map narrow-map
+      ("b" . org-narrow-to-block)
+      ("e" . org-narrow-to-element)
+      ("s" . org-narrow-to-subtree))
+    :config
+    (setq org-directory (expand-file-name "~/Documents/Org/"))
+    (setq org-agenda-files (list "agenda.org" "inbox.org" "projects.org" "personal.org" "readinglist.org")) 
+    (setq org-agenda-skip-scheduled-if-done t)
+    (setq org-imenu-depth 7)
+    (setq org-refile-targets '(("agenda.org" :maxlevel . 1)
+      ("personal.org" :maxlevel . 1)
+      ("readinglist.org" :maxlevel . 1)
+      ("projects.org" :maxlevel . 2)))
+    (setq org-refile-use-outline-path 'file)
+    (setq org-outline-path-complete-in-steps nil)
+    (setq org-hide-emphasis-markers nil)
+    (setq org-hide-leading-stars nil)
+    (setq org-ellipsis " ▼")
+    (setq org-cycle-separator-lines 1) ;;number of seperator lines between collapsed headings
+    (setq org-structure-template-alist
+  	'(("s" . "src")
+  	  ("e" . "src emacs-lisp")
+  	  ("E" . "src emacs-lisp :results value code :lexical t")
+  	  ("t" . "src emacs-lisp :tangle FILENAME")
+  	  ("b" . "src bash")
+  	  ("x" . "comment")
+          ("n" . "note")
+  	  ("q" . "quote")))
+    (setq org-fold-catch-invisible-edits 'show) ;; what happens when you edit in a folded block
+    (setq org-loop-over-headlines-in-active-region 'start-level)
+    (setq org-modules '(ol-info ol-eww))
+    (setq org-startup-with-inline-images t)
+    (setq org-insert-heading-respect-content t)
+    ;;(setq org-highlight-latex-and-related nil) ; other options affect elisp regexp in src blocks
+    (setq org-fontify-quote-and-verse-blocks t)
+    (setq org-fontify-whole-block-delimiter-line t)
+    (setq org-fontify-done-headline nil)
+    (setq org-priority-faces nil)
+    (setq org-log-done 'time)
+    (setq org-table-convert-region-max-lines 20000)
+    (setq org-todo-keywords        ; This overwrites the default Doom org-todo-keywords
+  	'((sequence
+  	   "TODO(t)"           ; A task that is ready to be tackled
+  	   "NEXT(n)"           ; An idea, not urgent
+  	   "HOLD(h)"            ; To read, not urgent
+  	   "|"                 ; needed for separation
+  	   "DONE(d)"           ; Task has been completed
+  	   "ARCHIVED(a)" )))
+    (setq org-link-frame-setup
+      '((file . find-file)))
+    (setq org-agenda-custom-commands
+      '(("g" "Get Things Done (GTD)"
+         ((agenda ""
+                  ((org-agenda-skip-function
+                    '(org-agenda-skip-entry-if 'deadline))
+                   (org-deadline-warning-days 0)))
+
+          (todo "NEXT"
+                ((org-agenda-skip-function
+                  '(org-agenda-skip-entry-if 'deadline))
+                 (org-agenda-prefix-format "  %i %-12:c [%e] ")
+                 (org-agenda-overriding-header "\nTasks\n")))
+
+
+          (tags-todo "planning"
+                     ((org-agenda-prefix-format "  %?-12t% s")
+                      (org-agenda-overriding-header "\nPlanning\n")))
+          (agenda nil
+                  ((org-agenda-entry-types '(:deadline))
+                   (org-agenda-format-date "")
+                   (org-deadline-warning-days 7)
+                   (org-agenda-skip-function
+                    '(org-agenda-skip-entry-if 'notregexp "\\* NEXT"))
+                   (org-agenda-overriding-header "\nDeadlines")))
+
+          (tags-todo "inbox"
+                     ((org-agenda-prefix-format "  %?-12t% s")
+                      (org-agenda-overriding-header "\nInbox\n")))
+     (org-link-set-parameters
+        "org-title"
+        :store (defun store-org-title-link ()
+                 "Store a link to the org file visited in the current buffer.
+     Use the #+TITLE as the link description. The link is only stored
+     if `org-store-link' is called from the #+TITLE line."
+                 (when (and (derived-mode-p 'org-mode)
+                            (save-excursion
+                              (beginning-of-line)
+                              (looking-at "#\\+\\(?:TITLE\\|title\\):")))
+                   (org-link-store-props
+                    :type "file"
+                    :link (concat "file:" (buffer-file-name))
+                    :description (cadar (org-collect-keywords '("TITLE")))))))
+          )))))
+#+end_src
+
 
 *** The =init.el= section with custom org functions
 
@@ -2356,7 +2470,7 @@ currently matched in the minibuffer.
   ("M-y" . consult-yank-pop)
   ("M-X" . consult-mode-command)
   ("C-c b" . consult-buffer)
-  ("C-c C-b" . consult-buffer)
+  ("C-c C-b" . consult-buffer) ;this only works in org-mode, in lisp mode it overwritten
   ("C-c 4 b" . consult-buffer-other-window)
   ("C->" . consult-register-store)
   ("C-," . consult-register-load)
@@ -2589,9 +2703,7 @@ The package is loaded directly from the git repo, which can be upgraded with /pa
     (setq denote-open-link-function #'find-file)
     (denote-rename-buffer-mode 1))
 
-(require 'denote)
 #+end_src 
-
 
 ** The =denote-extras.el= section on custom denote functions
 
@@ -2651,7 +2763,7 @@ Page ]]
 
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package consult-denote
-  :ensure t
+  :vc (:url "https://github.com/protesilaos/consult-denote"  :rev :newest)
   :bind
   (("C-c n f" . consult-denote-find)
    ("C-c n g" . consult-denote-grep))
@@ -2672,7 +2784,7 @@ Page ]]
 
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package denote-org
-  :ensure t
+  :vc (:url "https://github.com/protesilaos/denote-org")
   :commands
   ;; I list the commands here so that you can discover them more
   ;; easily.  You might want to bind the most frequently used ones to
@@ -2695,7 +2807,6 @@ Page ]]
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package denote-silo
   :vc (:url "https://github.com/protesilaos/denote-silo")
-  :ensure nil
   ;; Bind these commands to key bindings of your choice.
   :commands ( denote-silo-create-note
               denote-silo-open-or-create
@@ -2717,7 +2828,7 @@ Page ]]
 
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package denote-journal
-  :ensure t
+  :vc (:url "https://github.com/protesilaos/denote-journal")
   ;; Bind those to some key for your convenience.
   :commands ( denote-journal-new-entry
               denote-journal-new-or-existing-entry
@@ -2748,6 +2859,7 @@ Page ]]
 
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package denote-embark
+  :vc (:url "https://github.com/StevenFolkersma/denote-embark.git" :rev :newest)
   :after (embark consult denote consult-extras)
   :config
   (dolist (map '(embark-org-link-map
@@ -2755,15 +2867,17 @@ Page ]]
                embark-identifier-map))
   (define-key (symbol-value map)
               (kbd "n")
-              steven-embark-link-map))
+              denote-embark-link-map))
   (dolist (map '(embark-file-map
                embark-buffer-map
                embark-bookmark-map))
   (define-key (symbol-value map)
               (kbd "n")
-              steven-embark-notes-map)))
+              denote-embark-notes-map)))
 #+end_src
 
+
+** The =init.el= section on prot pair
 #+begin_src emacs-lisp :tangle "init.el"
 (require 'prot-pair)
 
@@ -2957,12 +3071,11 @@ controlled by `delete-pair-blink-delay'."
 
 #+end_src
 
-[[*The =early-init.el= initialises the package cache][The =early-init.el= initialises the package cache]] ** The =init.el= section to setup completion with vertico
+
+** The =init.el= section to setup completion with vertico
 Configure the minibuffer and completions.
 - vertico-cycle: So I can go from bottom item to top item by down arrow or C-n
 - vertico-resize nil: always keep the same size.
-
-
 
 #+begin_src emacs-lisp :tangle "init.el" :results silent
 (use-package vertico
@@ -3143,7 +3256,8 @@ I need to check how the :bind setup works, it might load the libraries not how I
         ("=" . quick-calc)
         ("x" . steven-gptel-prompt-and-respond))
   (:map embark-file-map
-        ("y" . steven-insert-relative-link))
+        ("L" . load-file)
+        ("C" . steven-embark-copy-file-or-directory)) ;from embark-extras
   (:map embark-heading-map
         ("SPC" . outline-mark-subtree)
         ("C-SPC" . embark-select))
@@ -3208,19 +3322,17 @@ I need to check how the :bind setup works, it might load the libraries not how I
 
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package embark-extras
-  :after embark
-  :bind
-  (:map embark-file-map
-        ("C" . steven-embark-copy-file-or-directory)
-        ("L" . steven-embark-store-org-link-from-file))
+  :after (embark consult embark-consult)
   :config
   (add-to-list 'embark-target-finders #'embark-target-this-buffer-file 'append)
   (add-to-list 'embark-keymap-alist '(this-buffer-file . this-buffer-file-map))
+  (add-to-list 'embark-keymap-alist '(consult-location . embark-consult-location-map))
   (unless (member 'embark-target-this-buffer-file embark-target-finders)
        (setq embark-target-finders
              (append (butlast embark-target-finders 2)
                      '(embark-target-this-buffer-file)
-                      (last embark-target-finders 2)))))
+                      (last embark-target-finders 2))))
+  (define-key embark-file-map (kbd "l") steven-embark-file-link-map))
 
 #+end_src
 
@@ -3258,7 +3370,7 @@ I need to check how the :bind setup works, it might load the libraries not how I
   (avy-background t))             ; dim background during selection
 #+end_src
 
-** The =init.el= section on completions and CAPE
+** The =init.el= section on ncompletions and CAPE
 
 Something I want to try:
 #+begin_src emacs-lisp :tangle "init.el"
@@ -3271,9 +3383,9 @@ Something I want to try:
   (add-hook 'completion-at-point-functions #'cape-elisp-block))
 
 ;this is interfering with prot-pair, need to find another one
-(global-set-key (kbd "C-'") #'completion-at-point)
+(global-set-key (kbd "C-\\") #'completion-at-point)
+;; (define-key org-mode-map (kbd 
 #+end_src
-
 
 ** The =init.el= section with corfu setup
 
@@ -3337,7 +3449,7 @@ If you customize 'shr-fill-text' to nil, EWW will now automatically turn on 'vis
   (setq olivetti-recall-visual-line-mode-entry-state nil))
 #+end_src
 
-** The =init.el= section to setup cursory
+** the =init.el= section to setup cursory
 
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package cursory
@@ -3383,14 +3495,14 @@ If you customize 'shr-fill-text' to nil, EWW will now automatically turn on 'vis
            :blink-cursor-interval 0.2
            :blink-cursor-delay 0.2)))
 
-  ;; I am using the default value of `cursory-latest-state-file'.
+  ;; i am using the default value of `cursory-latest-state-file'.
 
-  ;; Set last preset or fall back to desired style from `cursory-presets'.
-  ;; Alternatively, use the function `cursory-set-last-or-fallback' (can be added to the `after-init-hook'.
+  ;; set last preset or fall back to desired style from `cursory-presets'.
+  ;; alternatively, use the function `cursory-set-last-or-fallback' (can be added to the `after-init-hook'.
   (cursory-set-preset (or (cursory-restore-latest-preset) 'box))
 
-  ;; Persist configurations between Emacs sessions.
-  ;; Also apply the :cursor-color again when swithcing to another theme.
+  ;; persist configurations between emacs sessions.
+  ;; also apply the :cursor-color again when swithcing to another theme.
   (cursory-mode 1))
 
 #+end_src
@@ -4107,8 +4219,8 @@ better with Linux.
     ("s" . gptel-send)
     ("r" . gptel-rewrite)
     ("a" . gptel-add)
-    ("m" . gptel-mode)
-    ("p" . gptel-menu)
+    ("o" . gptel-mode)
+    ("m" . gptel-menu)
     ("x" . gptel-context-remove-all)))
   :config
   ;(require 'gptel-extras) ;; hard loading the extras
@@ -4127,7 +4239,10 @@ better with Linux.
   (let* ((openai
           (gptel-make-openai
            "openai"
-           :key (steven--get-api-key "openai-personal")))
+           :key (steven--get-api-key "openai-personal")
+           :models '(gpt-5.4
+                     gpt-5.5
+                     gpt-5.5-mini)))
 
          (claude
           (gptel-make-anthropic
@@ -4168,8 +4283,11 @@ better with Linux.
          :backend ,mistral
          :model mistral-large-latest)))))
   (steven-init-gptel)
-  (setq gptel-backend `openai-mini)
-  (setq gptel-stream t))
+  (setq gptel-backend        (gptel-get-backend "openai")
+        gptel-model          'gpt-5.5
+        gptel-default-mode   'org-mode
+        gptel-stream         t))
+  
 
 (use-package gptel-agent
   :vc ( :url "https://github.com/karthink/gptel-agent"
@@ -4178,16 +4296,11 @@ better with Linux.
 
 (use-package gptel-extras
   :after gptel
-  :config
-  (define-key global-gptel-map
-              (kbd "b")
-              #'steven-gptel-switch-backend)
-  (define-key global-gptel-map
-              (kbd "w")
-              #'steven-gptel-lookup)
-  (define-key global-gptel-map
-              (kbd "p")
-              #'steven-gptel-prompt-and-respond))
+  :bind
+  (:map global-gptel-map
+        ("b" . steven-gptel-switch-backend)
+        ("e" . steven-gptel-lookup) ;etmology lookup
+        ("p" . steven-gptel-prompt-and-respond)))
 
 #+end_src
 word
@@ -4234,8 +4347,6 @@ To make it use another function, I need to define some presets.
 (setf (alist-get 'default-lisp-function gptel-directives)
         "You are an expert in emacs lisp. Answer only in lisp code, no explanations needed")
 
-
-
 ;;;###autoload
 (defun steven-gptel-switch-backend ()
   (interactive)
@@ -4257,64 +4368,85 @@ To make it use another function, I need to define some presets.
    (list
     (or (thing-at-point 'word t)
         (read-string "Word: " nil gptel-lookup--history))))
-
   (when (string= word "") (user-error "A word is required."))
+  (let* ((profile    (cdr (assoc "mistral" steven-gptel-profiles)))
+         (gptel-backend  (plist-get profile :backend))
+         (gpt-model      (plist-get profile :model))
+         (prompt-file (if (eq steven--current-language 'dutch)
+                          "~/.config/emacs/prompts/word-etmologist-nl.txt"
+                        "~/.config/emacs/prompts/word-etmologist-en.txt"))
+         (buf (get-buffer-create "*Word Definition*")))
+    (message "Collecting the One True Definition of **%s**...." word)
+    (gptel-request
+     word
+     :system  (steven--gptel-read-prompt (expand-file-name prompt-file))
+     :callback
+     (lambda (response info)
+       (if (not response)
+           (message "gptel-prompt-and-respond failed: %s" (plist-get info :status))
+         (with-current-buffer (get-buffer-create "*Word Definition*")
+           (let ((inhibit-read-only t))
+             (erase-buffer)
+             (insert response)
+             (goto-char (point-min))
+             (org-mode)
+             (visual-line-mode)
+             (read-only-mode 1))
+           (display-buffer
+            (current-buffer)
+            '((display-buffer-in-side-window)
+              (side . right)
+              (window-width . 0.5)
+              (slot . 0)))))))))
 
-  (gptel-request
-   word
-   :system (steven--gptel-read-prompt
-            (expand-file-name "~/.config/emacs/prompts/word-etmologist-en.txt"))
-   :callback
-   (lambda (response info)
-     (if (not response)
-         (message "gptel-lookup failed with message: %s"
-                  (plist-get info :status))
-       (with-current-buffer (get-buffer-create "*Word Definition*")
-         (let ((inhibit-read-only t))
-           (erase-buffer)
-           (insert response)
-           (goto-char (point-min))
-           (org-mode)
-           (visual-line-mode)
-           (read-only-mode 1))
-
-       (display-buffer
-                 (current-buffer)
-                 `((display-buffer-in-side-window)
-                   (side . right)
-                   (window-width . 0.5)
-                   (slot . 0))))))))
-
-;;;###autoload 
-(defun steven-gptel-prompt-and-respond ()
-  "Prompt for an instruction, optionally include the active region,
-   open an Org scratch buffer for the response, and set the directive
-   based on the current major mode."
-  (interactive)
-  (let ((instruction (read-string "Instruction: "))
-        (region-text (when (use-region-p)
-                       (buffer-substring-no-properties (region-beginning) (region-end))))
-        (directive (if (derived-mode-p 'text-mode)
-                       "default-writing-short"
-                     "default-emacs-short"))
-        (response-buffer (get-buffer-create "*GPTel Response*")))
-
-    ;; Prepare the prompt with the instruction and optional region
-    (let ((prompt (if region-text
-                      (format "Instruction: %s\n\nSelected text:\n%s" instruction region-text)
-                    instruction)))
-
-      ;; Insert the prompt into the response buffer with appropriate directive
-      (with-current-buffer response-buffer
-        (org-mode)
-        (erase-buffer)
-        (insert (format "#+BEGIN_SRC :directive %s\n%s\n#+END_SRC\n\n" directive prompt))
-        (goto-char (point-max))
-        (insert "# Response will appear below:\n\n")
-        (display-buffer response-buffer)))))
+;;;###autoload
+(defun steven-gptel-prompt-and-respond (region-text instruction)
+  "Send REGION-TEXT with INSTRUCTION to gptel and display the response.
+REGION-TEXT is captured first so Embark can supply it as the target."
+  (interactive
+   (list
+    (if (use-region-p)
+        (prog1 (buffer-substring-no-properties (region-beginning) (region-end))
+          (deactivate-mark))
+      "")
+    (read-string "Instruction: ")))
+  (let* ((system-prompt (alist-get
+                         (if (derived-mode-p 'text-mode)
+                             'default-writing-short
+                           'default-emacs-short)
+                         gptel-directives))
+         (prompt (if (string-empty-p region-text)
+                     instruction
+                   (format "%s\n\n%s" instruction region-text))))
+    (message "Collecting information, entangling a response")
+    (gptel-request
+     prompt
+     :system system-prompt
+     :callback
+     (lambda (response info)
+       (if (not response)
+           (message "gptel-prompt-and-respond failed: %s" (plist-get info :status))
+         (with-current-buffer (get-buffer-create "*The Response*")
+           (let ((inhibit-read-only t))
+             (erase-buffer)
+             ;(insert "* Prompt\n\n" instruction "\n")
+             ;(unless (string-empty-p region-text)
+             ;  (insert "\n** Region\n\n" region-text "\n"))
+             (insert response)
+             (goto-char (point-min))
+             (org-mode)
+             (visual-line-mode)
+             (read-only-mode 1))
+           (display-buffer
+            (current-buffer)
+            '((display-buffer-in-side-window)
+              (side . right)
+              (window-width . 0.5)
+              (slot . 0)))))))))
 
 (provide 'gptel-extras)
 ;;gptel-extras.el ends here
+
 #+end_src
 
 ** The section with gptel prompt
@@ -4459,7 +4591,9 @@ Fujifilm X-E3 guidance rules:
 - Mention useful Fujifilm features when relevant (Film Simulations, DR modes, Focus Peaking, etc.).
 - When giving settings, include a “starting point” configuration rather than absolute rules.
 #+end_src
-** The =init.el= section with center document mode
+
+
+** TODO The =init.el= section with center document mode
 This is copied from the 'Emacs From Scratch' series. See [[https://github.com/daviwil/emacs-from-scratch][GitHub - daviwil/emacs-from-scratch]]
 
 #+begin_src emacs-lisp :tangle "init.el"
@@ -4515,8 +4649,9 @@ A package by Prot to display font styles
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package show-font
   :ensure t)
-
 #+end_src
+
+** The =embark-extras.el= section with custom embark functions
 
 Custom embark functions. The copy file or directory function is mapped
 to C, standard c is copy-file, which does not work for directories.
@@ -4526,6 +4661,21 @@ This needs to be tangled in its own file. See oantolin setup for more informatio
 #+begin_src emacs-lisp :tangle "steven/embark-extras.el"
 ;;; -*- lexical-binding: t -*-
 
+(defvar embark-consult-location-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "l") #'steven-org-link-heading-here)
+    map)
+  "Keymap for consult-location actions.") 
+
+(defvar steven-embark-file-link-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "l") #'embark-insert-link)
+    (define-key map (kbd "r") #'embark-insert-relative-link)
+    (define-key map (kbd "o") #'steven-embark-store-org-link)
+    map)
+  "Keymap for note-related Embark actions on files.") 
+
+;;;###autoload
 (defun steven-embark-copy-file-or-directory (path)
   "Copy file or directory PATH."
   (interactive "fCopy: ")
@@ -4534,7 +4684,23 @@ This needs to be tangled in its own file. See oantolin setup for more informatio
         (copy-directory path dest nil nil t)
       (copy-file path dest t))))
 
+;;;###autoload
+(defun embark-insert-relative-link (file)
+  "Insert a relative Org link without a description to TARGET file"
+  (interactive "fFile: ")
+  (let* ((relative (file-relative-name file default-directory)))
+    (insert (format "[[file:%s]]" relative))))
+
+;;;###autoload
+(defun embark-insert-link (file)
+  "Insert a relative Org link without a description to TARGET file"
+  (interactive "fFile: ")
+  (let* ((name (file-name-nondirectory file)))
+    (insert (format "[[file:%s][%s]]" file name))))
+
+;;;###autoload
 (cl-defun steven-org-link-heading-here (cand)
+  "Store link to consult-location"
   (when-let* ((marker (or (get-text-property 0 'consult--candidate cand)
                          (car (get-text-property 0 'consult-location cand)))))
     (save-excursion
@@ -4543,6 +4709,7 @@ This needs to be tangled in its own file. See oantolin setup for more informatio
     (org-insert-all-links 1 "" " ")))
 
 ;; For files, the default action is find-file:
+;;;###autoload
 (defun steven-embark-store-org-link-from-file (cand)
   "Store an Org link for file CAND and insert it at origin."
   (interactive "sFile: ")
@@ -4554,16 +4721,9 @@ This needs to be tangled in its own file. See oantolin setup for more informatio
       (goto-char origin-point)
       (org-insert-last-stored-link 1))))
 
-(defvar-keymap embark-consult-outline-map
-  :doc "Keymap for operating on org headings in consult-outline"
-  :parent embark-general-map
-  "L" #'steven-org-link-heading-here)
-
-;; does this need embark-consult?
-(add-to-list 'embark-keymap-alist '(consult-location . embark-consult-outline-map))
-
 ;; Stolen from kathinks
 ;; Embark actions for this buffer/file
+;;;###autoload
 (defun embark-target-this-buffer-file ()
       (cons 'this-buffer-file (buffer-name)))
 
@@ -4597,11 +4757,12 @@ This needs to be tangled in its own file. See oantolin setup for more informatio
           (define-key map (kbd key) command))
         map))
 
-(defun embark-act-with-completing-read (&optional arg)
-      (interactive "P")
-      (let* ((embark-prompter 'embark-completing-read-prompter)
-             (embark-indicators '(embark-minimal-indicator)))
-        (embark-act arg)))
+
+;; (defun embark-act-with-completing-read (&optional arg)
+;;       (interactive "P")
+;;       (let* ((embark-prompter 'embark-completing-read-prompter)
+;;              (embark-indicators '(embark-minimal-indicator)))
+;;         (embark-act arg)))
 
 (provide 'embark-extras)
 ;;embark-extras.el ends here
@@ -4643,9 +4804,10 @@ This needs to be tangled in its own file. See oantolin setup for more informatio
 #+end_src
 
 ** The =denote-embark.el= section
-My functions testing the combination of consult-dir and embark with denote
+My functions testing the combination of consult-dir and embark with denote.
+Now loading the package from git, [[*The =init.el= section to set up denote-embark]]
 
-#+begin_src emacs-lisp :tangle "steven/denote-embark.el"
+#+begin_src emacs-lisp
 ;;; -*- lexical-binding: t -*-
 (defvar steven-embark-notes-map
   (let ((map (make-sparse-keymap)))
@@ -5142,6 +5304,9 @@ or nil."
        ;'face 'steven-header-line
        ))))
 
+
+;; Issue is that buffer-local language can differ from global language
+;; A solution is below.
 (defun steven--header-line-language ()
   "Return `steven--current-language' as \"EN \" or \"NL \"."
   (propertize
@@ -5150,6 +5315,15 @@ or nil."
                 ("dutch" . "NL "))
               nil nil #'string=)
    'face '(:weight bold)))
+
+;; (defun steven--header-line-language ()
+;;   "Return current ispell dictionary as a short language code."
+;;   (propertize
+;;    (pcase ispell-local-dictionary
+;;      ("en_GB" "EN ")
+;;      ("nl_NL" "NL ")
+;;      (_ ispell-local-dictionary))
+;;    'face '(:weight bold)))
 
 (defun steven-header-line-ispell-dict ()
   "Return an icon if Flyspell is active."

@@ -35,8 +35,6 @@
 (setf (alist-get 'default-lisp-function gptel-directives)
         "You are an expert in emacs lisp. Answer only in lisp code, no explanations needed")
 
-
-
 ;;;###autoload
 (defun steven-gptel-switch-backend ()
   (interactive)
@@ -59,21 +57,21 @@
     (or (thing-at-point 'word t)
         (read-string "Word: " nil gptel-lookup--history))))
   (when (string= word "") (user-error "A word is required."))
-  (let* ((profile (cdr (assoc "Mistral" steven-gptel-profiles)))
-         (backend (plist-get profile :backend))
-         (model   (plist-get profile :model))
+  (let* ((profile    (cdr (assoc "mistral" steven-gptel-profiles)))
+         (gptel-backend  (plist-get profile :backend))
+         (gpt-model      (plist-get profile :model))
          (prompt-file (if (eq steven--current-language 'dutch)
                           "~/.config/emacs/prompts/word-etmologist-nl.txt"
-                        "~/.config/emacs/prompts/word-etmologist-en.txt")))
+                        "~/.config/emacs/prompts/word-etmologist-en.txt"))
+         (buf (get-buffer-create "*Word Definition*")))
+    (message "Collecting the One True Definition of **%s**...." word)
     (gptel-request
      word
-     :backend ,mistral
-     :model   mistral-large-latest
      :system  (steven--gptel-read-prompt (expand-file-name prompt-file))
      :callback
      (lambda (response info)
        (if (not response)
-           (message "gptel-lookup failed with message: %s" (plist-get info :status))
+           (message "gptel-prompt-and-respond failed: %s" (plist-get info :status))
          (with-current-buffer (get-buffer-create "*Word Definition*")
            (let ((inhibit-read-only t))
              (erase-buffer)
@@ -108,6 +106,7 @@ REGION-TEXT is captured first so Embark can supply it as the target."
          (prompt (if (string-empty-p region-text)
                      instruction
                    (format "%s\n\n%s" instruction region-text))))
+    (message "Collecting information, entangling a response")
     (gptel-request
      prompt
      :system system-prompt
@@ -115,13 +114,13 @@ REGION-TEXT is captured first so Embark can supply it as the target."
      (lambda (response info)
        (if (not response)
            (message "gptel-prompt-and-respond failed: %s" (plist-get info :status))
-         (with-current-buffer (get-buffer-create "*GPTel Response*")
+         (with-current-buffer (get-buffer-create "*The Response*")
            (let ((inhibit-read-only t))
              (erase-buffer)
-             (insert "* Prompt\n\n" instruction "\n")
-             (unless (string-empty-p region-text)
-               (insert "\n** Region\n\n" region-text "\n"))
-             (insert "\n* Response\n\n" response)
+             ;(insert "* Prompt\n\n" instruction "\n")
+             ;(unless (string-empty-p region-text)
+             ;  (insert "\n** Region\n\n" region-text "\n"))
+             (insert response)
              (goto-char (point-min))
              (org-mode)
              (visual-line-mode)

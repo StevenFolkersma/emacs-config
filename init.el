@@ -126,8 +126,12 @@ The DWIM behaviour of this command is as follows:
 (bind-key "C-c C-m" #'execute-extended-command)
 (bind-key "C-x m" nil)
 
+;; One my annoyances
+(with-eval-after-load 'elisp-mode
+  (keymap-unset emacs-lisp-mode-map "C-c b"))
+
 (setq scroll-conservatively 101 ; affects `scroll-step'
-      scroll-margin 0
+      scroll-margin 3
       auto-window-vscroll t
       scroll-preserve-screen-position t)
 
@@ -151,6 +155,22 @@ The DWIM behaviour of this command is as follows:
 (defun steven-scroll-up-quarter-screen ()
   (interactive)
   (scroll-down-command (steven-scroll--quarter-screen-lines)))
+
+(defun my-recenter-after-jump (window new-win-start)
+  "Recenter the point after a non-scroll command brings it out of view.
+This function is meant to be called from the hook ‘window-scroll-functions’."
+  (interactive)
+  (with-selected-window window
+    (let* ((new-start-line (line-number-at-pos new-win-start))
+           (old-start-line (or (bound-and-true-p last-start-line-memo)
+                               (line-number-at-pos (point))))
+           (distance (abs (- old-start-line new-start-line))))
+      (when (and (> distance 5)
+                 (not isearch-mode)
+                 (not (get last-command 'scroll-command)))
+        (recenter))
+      (setq-local last-start-line-memo new-start-line))))
+(add-hook 'window-scroll-functions #'my-recenter-after-jump)
 
 (global-set-key (kbd "C-v") #'steven-scroll-down-quarter-screen)
 (global-set-key (kbd "M-v") #'steven-scroll-up-quarter-screen)
@@ -739,34 +759,6 @@ Can be either 'default or 'minimal.")
   (setq use-hard-newlines nil)
   (setq adaptive-fill-mode t))
 
-(defun increase-region-font-size (start end &optional factor)
-  "Increase the font size of the text in the region by FACTOR (default 1.5). 
-   Applies a relative height text property to the selected region."
-  (interactive "r")
-  (let ((factor (or factor 1.5)))
-    (with-silent-modifications
-      (add-text-properties start end '(face (:height 1.5))))))
-
-(defun decrease-region-font-size (start end &optional factor)
-  "Decrease the font size of the text in the region by FACTOR (default 0.75). 
-   Applies a relative height text property to the selected region."
-  (interactive "r")
-  (let ((factor (or factor 0.75)))
-    (with-silent-modifications
-      (add-text-properties start end '(face (:height 0.75))))))
-
-(defun reset-region-font-size (start end)
-  "Remove custom font size from the region"
-  (interactive "r")
-  (with-silent-modifications
-      (remove-text-properties start end '(face nil))))
-
-(global-set-key (kbd "C-c +") 'increase-region-font-size)
-(global-set-key (kbd "C-c -") 'decrease-region-font-size)
-(global-set-key (kbd "C-c 0") 'reset-region-font-size)
-
-;;(add-hook 'text-mode-hook 'visual-line-mode) (add-hook 'text-mode-hook 'visual-wrap-prefix-mode)
-
 (use-package visual-fill-column
   :ensure t)
 
@@ -1103,7 +1095,7 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
 
     ('english
      ;; Spell checking
-     (setq ispell-change-dictionary "en_GB")
+     (ispell-change-dictionary "en_GB")
      (setq wiktionary-bro-language "en")
      ;; Example future settings:
      ;; (setq some-var ...)
@@ -1113,7 +1105,7 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
 
     ('dutch
      ;; Spell checking
-     (setq ispell-change-dictionary "nl_NL")
+     (ispell-change-dictionary "nl_NL")
      (setq wiktionary-bro-language "nl")
      ;; Example future settings:
      ;; (setq some-var ...)
@@ -1131,6 +1123,7 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
 
   (steven--apply-language-settings))
 
+(steven--apply-language-settings)
 (bind-key "C-<f7>" #'steven-toggle-language)
 
 ;; Set the default server to dict.org (avoids prompting each time)
@@ -1254,6 +1247,122 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   ;:config
   ;(fset 'markdown-mode-style-map markdown-mode-style-map)
   ;(modify-syntax-entry ?\" "\"" markdown-mode-syntax-table))
+
+      ;;; Org-mode (personal information manager)
+(use-package org
+    :ensure nil
+    ;;:init
+    ;;(add-to-list 'safe-local-variable-values '(org-hide-leading-stars . t))
+    ;;(add-to-list 'safe-local-variable-values '(org-hide-macro-markers . t))
+    :bind
+    ( :map global-map
+      ("C-c l" . org-store-link)
+      ("C-c a" . org-agenda)
+      ("C-c o" . org-open-at-point-global)
+      :map org-mode-map
+      ;; I don't like that Org binds one zillion keys, so if I want one
+      ;; for something more important, I disable it from here.
+      ("C-c M-l" . org-insert-last-stored-link)
+      ("C-c C-M-l" . org-toggle-link-display)
+      ("C-'" . nil) ;using this for completion-at-point
+      ("C-," . nil)
+      ("C-c C-b" . nil) ;using this to switch buffer
+      ;("M-." . org-edit-special) ; alias for C-c ' (mnenomic is global M-. that goes to source)
+      :map org-src-mode-map
+      ("M-," . org-edit-src-exit) ; see M-. above
+      :map narrow-map
+      ("b" . org-narrow-to-block)
+      ("e" . org-narrow-to-element)
+      ("s" . org-narrow-to-subtree))
+    :config
+    (setq org-directory (expand-file-name "~/Documents/Org/"))
+    (setq org-agenda-files (list "agenda.org" "inbox.org" "projects.org" "personal.org" "readinglist.org")) 
+    (setq org-agenda-skip-scheduled-if-done t)
+    (setq org-imenu-depth 7)
+    (setq org-refile-targets '(("agenda.org" :maxlevel . 1)
+      ("personal.org" :maxlevel . 1)
+      ("readinglist.org" :maxlevel . 1)
+      ("projects.org" :maxlevel . 2)))
+    (setq org-refile-use-outline-path 'file)
+    (setq org-outline-path-complete-in-steps nil)
+    (setq org-hide-emphasis-markers nil)
+    (setq org-hide-leading-stars nil)
+    (setq org-ellipsis " ▼")
+    (setq org-cycle-separator-lines 1) ;;number of seperator lines between collapsed headings
+    (setq org-structure-template-alist
+  	'(("s" . "src")
+  	  ("e" . "src emacs-lisp")
+  	  ("E" . "src emacs-lisp :results value code :lexical t")
+  	  ("t" . "src emacs-lisp :tangle FILENAME")
+  	  ("b" . "src bash")
+  	  ("x" . "comment")
+          ("n" . "note")
+  	  ("q" . "quote")))
+    (setq org-fold-catch-invisible-edits 'show) ;; what happens when you edit in a folded block
+    (setq org-loop-over-headlines-in-active-region 'start-level)
+    (setq org-modules '(ol-info ol-eww))
+    (setq org-startup-with-inline-images t)
+    (setq org-insert-heading-respect-content t)
+    ;;(setq org-highlight-latex-and-related nil) ; other options affect elisp regexp in src blocks
+    (setq org-fontify-quote-and-verse-blocks t)
+    (setq org-fontify-whole-block-delimiter-line t)
+    (setq org-fontify-done-headline nil)
+    (setq org-priority-faces nil)
+    (setq org-log-done 'time)
+    (setq org-table-convert-region-max-lines 20000)
+    (setq org-todo-keywords        ; This overwrites the default Doom org-todo-keywords
+  	'((sequence
+  	   "TODO(t)"           ; A task that is ready to be tackled
+  	   "NEXT(n)"           ; An idea, not urgent
+  	   "HOLD(h)"            ; To read, not urgent
+  	   "|"                 ; needed for separation
+  	   "DONE(d)"           ; Task has been completed
+  	   "ARCHIVED(a)" )))
+    (setq org-link-frame-setup
+      '((file . find-file)))
+    (setq org-agenda-custom-commands
+      '(("g" "Get Things Done (GTD)"
+         ((agenda ""
+                  ((org-agenda-skip-function
+                    '(org-agenda-skip-entry-if 'deadline))
+                   (org-deadline-warning-days 0)))
+
+          (todo "NEXT"
+                ((org-agenda-skip-function
+                  '(org-agenda-skip-entry-if 'deadline))
+                 (org-agenda-prefix-format "  %i %-12:c [%e] ")
+                 (org-agenda-overriding-header "\nTasks\n")))
+
+
+          (tags-todo "planning"
+                     ((org-agenda-prefix-format "  %?-12t% s")
+                      (org-agenda-overriding-header "\nPlanning\n")))
+          (agenda nil
+                  ((org-agenda-entry-types '(:deadline))
+                   (org-agenda-format-date "")
+                   (org-deadline-warning-days 7)
+                   (org-agenda-skip-function
+                    '(org-agenda-skip-entry-if 'notregexp "\\* NEXT"))
+                   (org-agenda-overriding-header "\nDeadlines")))
+
+          (tags-todo "inbox"
+                     ((org-agenda-prefix-format "  %?-12t% s")
+                      (org-agenda-overriding-header "\nInbox\n")))
+     (org-link-set-parameters
+        "org-title"
+        :store (defun store-org-title-link ()
+                 "Store a link to the org file visited in the current buffer.
+     Use the #+TITLE as the link description. The link is only stored
+     if `org-store-link' is called from the #+TITLE line."
+                 (when (and (derived-mode-p 'org-mode)
+                            (save-excursion
+                              (beginning-of-line)
+                              (looking-at "#\\+\\(?:TITLE\\|title\\):")))
+                   (org-link-store-props
+                    :type "file"
+                    :link (concat "file:" (buffer-file-name))
+                    :description (cadar (org-collect-keywords '("TITLE")))))))
+          )))))
 
 (defun log-todo-next-creation-date (&rest ignore)
   "Log NEXT creation time in the property drawer under the key 'ACTIVATED'"
@@ -1424,7 +1533,7 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   ("M-y" . consult-yank-pop)
   ("M-X" . consult-mode-command)
   ("C-c b" . consult-buffer)
-  ("C-c C-b" . consult-buffer)
+  ("C-c C-b" . consult-buffer) ;this only works in org-mode, in lisp mode it overwritten
   ("C-c 4 b" . consult-buffer-other-window)
   ("C->" . consult-register-store)
   ("C-," . consult-register-load)
@@ -1611,12 +1720,10 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
     (setq denote-open-link-function #'find-file)
     (denote-rename-buffer-mode 1))
 
-(require 'denote)
-
 (use-package steven-denote-extras)
 
 (use-package consult-denote
-  :ensure t
+  :vc (:url "https://github.com/protesilaos/consult-denote")
   :bind
   (("C-c n f" . consult-denote-find)
    ("C-c n g" . consult-denote-grep))
@@ -1633,7 +1740,7 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   (consult-denote-mode 1))
 
 (use-package denote-org
-  :ensure t
+  :vc (:url "https://github.com/protesilaos/denote-org")
   :commands
   ;; I list the commands here so that you can discover them more
   ;; easily.  You might want to bind the most frequently used ones to
@@ -1654,7 +1761,6 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
 
 (use-package denote-silo
   :vc (:url "https://github.com/protesilaos/denote-silo")
-  :ensure nil
   ;; Bind these commands to key bindings of your choice.
   :commands ( denote-silo-create-note
               denote-silo-open-or-create
@@ -1671,7 +1777,7 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
               "~/Documents/Recipebook/Recipes")))
 
 (use-package denote-journal
-  :ensure t
+  :vc (:url "https://github.com/protesilaos/denote-journal")
   ;; Bind those to some key for your convenience.
   :commands ( denote-journal-new-entry
               denote-journal-new-or-existing-entry
@@ -1697,6 +1803,7 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
        nil nil nil nil nil))))
 
 (use-package denote-embark
+  :vc (:url "https://github.com/StevenFolkersma/denote-embark.git" :rev :newest)
   :after (embark consult denote consult-extras)
   :config
   (dolist (map '(embark-org-link-map
@@ -1704,13 +1811,13 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
                embark-identifier-map))
   (define-key (symbol-value map)
               (kbd "n")
-              steven-embark-link-map))
+              denote-embark-link-map))
   (dolist (map '(embark-file-map
                embark-buffer-map
                embark-bookmark-map))
   (define-key (symbol-value map)
               (kbd "n")
-              steven-embark-notes-map)))
+              denote-embark-notes-map)))
 
 (require 'prot-pair)
 
@@ -1873,7 +1980,8 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
         ("=" . quick-calc)
         ("x" . steven-gptel-prompt-and-respond))
   (:map embark-file-map
-        ("y" . steven-insert-relative-link))
+        ("L" . load-file)
+        ("C" . steven-embark-copy-file-or-directory)) ;from embark-extras
   (:map embark-heading-map
         ("SPC" . outline-mark-subtree)
         ("C-SPC" . embark-select))
@@ -1934,19 +2042,17 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
         ("e" . org-edit-special)))
 
 (use-package embark-extras
-  :after embark
-  :bind
-  (:map embark-file-map
-        ("C" . steven-embark-copy-file-or-directory)
-        ("L" . steven-embark-store-org-link-from-file))
+  :after (embark consult embark-consult)
   :config
   (add-to-list 'embark-target-finders #'embark-target-this-buffer-file 'append)
   (add-to-list 'embark-keymap-alist '(this-buffer-file . this-buffer-file-map))
+  (add-to-list 'embark-keymap-alist '(consult-location . embark-consult-location-map))
   (unless (member 'embark-target-this-buffer-file embark-target-finders)
        (setq embark-target-finders
              (append (butlast embark-target-finders 2)
                      '(embark-target-this-buffer-file)
-                      (last embark-target-finders 2)))))
+                      (last embark-target-finders 2))))
+  (define-key embark-file-map (kbd "l") steven-embark-file-link-map))
 
 (use-package avy
   :ensure t
@@ -1987,7 +2093,8 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
   (add-hook 'completion-at-point-functions #'cape-elisp-block))
 
 ;this is interfering with prot-pair, need to find another one
-(global-set-key (kbd "C-'") #'completion-at-point)
+(global-set-key (kbd "C-\\") #'completion-at-point)
+;; (define-key org-mode-map (kbd
 
 (use-package shr
   :ensure nil
@@ -2053,14 +2160,14 @@ Restore the buffer with \\<dired-mode-map>`\\[revert-buffer]'."
            :blink-cursor-interval 0.2
            :blink-cursor-delay 0.2)))
 
-  ;; I am using the default value of `cursory-latest-state-file'.
+  ;; i am using the default value of `cursory-latest-state-file'.
 
-  ;; Set last preset or fall back to desired style from `cursory-presets'.
-  ;; Alternatively, use the function `cursory-set-last-or-fallback' (can be added to the `after-init-hook'.
+  ;; set last preset or fall back to desired style from `cursory-presets'.
+  ;; alternatively, use the function `cursory-set-last-or-fallback' (can be added to the `after-init-hook'.
   (cursory-set-preset (or (cursory-restore-latest-preset) 'box))
 
-  ;; Persist configurations between Emacs sessions.
-  ;; Also apply the :cursor-color again when swithcing to another theme.
+  ;; persist configurations between emacs sessions.
+  ;; also apply the :cursor-color again when swithcing to another theme.
   (cursory-mode 1))
 
 (use-package logos
@@ -2449,8 +2556,8 @@ Otherwise rename to:
     ("s" . gptel-send)
     ("r" . gptel-rewrite)
     ("a" . gptel-add)
-    ("m" . gptel-mode)
-    ("p" . gptel-menu)
+    ("o" . gptel-mode)
+    ("m" . gptel-menu)
     ("x" . gptel-context-remove-all)))
   :config
   ;(require 'gptel-extras) ;; hard loading the extras
@@ -2469,7 +2576,10 @@ Otherwise rename to:
   (let* ((openai
           (gptel-make-openai
            "openai"
-           :key (steven--get-api-key "openai-personal")))
+           :key (steven--get-api-key "openai-personal")
+           :models '(gpt-5.4
+                     gpt-5.5
+                     gpt-5.5-mini)))
 
          (claude
           (gptel-make-anthropic
@@ -2510,8 +2620,11 @@ Otherwise rename to:
          :backend ,mistral
          :model mistral-large-latest)))))
   (steven-init-gptel)
-  (setq gptel-backend `openai-mini)
-  (setq gptel-stream t))
+  (setq gptel-backend        (gptel-get-backend "openai")
+        gptel-model          'gpt-5.5
+        gptel-default-mode   'org-mode
+        gptel-stream         t))
+  
 
 (use-package gptel-agent
   :vc ( :url "https://github.com/karthink/gptel-agent"
@@ -2520,16 +2633,11 @@ Otherwise rename to:
 
 (use-package gptel-extras
   :after gptel
-  :config
-  (define-key global-gptel-map
-              (kbd "b")
-              #'steven-gptel-switch-backend)
-  (define-key global-gptel-map
-              (kbd "w")
-              #'steven-gptel-lookup)
-  (define-key global-gptel-map
-              (kbd "p")
-              #'steven-gptel-prompt-and-respond))
+  :bind
+  (:map global-gptel-map
+        ("b" . steven-gptel-switch-backend)
+        ("e" . steven-gptel-lookup) ;etmology lookup
+        ("p" . steven-gptel-prompt-and-respond)))
 
 (defvar center-document-desired-width 80
   "The desired width of a document centered in the window.")

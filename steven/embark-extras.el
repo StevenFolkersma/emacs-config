@@ -1,5 +1,20 @@
 ;;; -*- lexical-binding: t -*-
 
+(defvar embark-consult-location-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "l") #'steven-org-link-heading-here)
+    map)
+  "Keymap for consult-location actions.") 
+
+(defvar steven-embark-file-link-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "l") #'embark-insert-link)
+    (define-key map (kbd "r") #'embark-insert-relative-link)
+    (define-key map (kbd "o") #'steven-embark-store-org-link)
+    map)
+  "Keymap for note-related Embark actions on files.") 
+
+;;;###autoload
 (defun steven-embark-copy-file-or-directory (path)
   "Copy file or directory PATH."
   (interactive "fCopy: ")
@@ -8,7 +23,23 @@
         (copy-directory path dest nil nil t)
       (copy-file path dest t))))
 
+;;;###autoload
+(defun embark-insert-relative-link (file)
+  "Insert a relative Org link without a description to TARGET file"
+  (interactive "fFile: ")
+  (let* ((relative (file-relative-name file default-directory)))
+    (insert (format "[[file:%s]]" relative))))
+
+;;;###autoload
+(defun embark-insert-link (file)
+  "Insert a relative Org link without a description to TARGET file"
+  (interactive "fFile: ")
+  (let* ((name (file-name-nondirectory file)))
+    (insert (format "[[file:%s][%s]]" file name))))
+
+;;;###autoload
 (cl-defun steven-org-link-heading-here (cand)
+  "Store link to consult-location"
   (when-let* ((marker (or (get-text-property 0 'consult--candidate cand)
                          (car (get-text-property 0 'consult-location cand)))))
     (save-excursion
@@ -17,6 +48,7 @@
     (org-insert-all-links 1 "" " ")))
 
 ;; For files, the default action is find-file:
+;;;###autoload
 (defun steven-embark-store-org-link-from-file (cand)
   "Store an Org link for file CAND and insert it at origin."
   (interactive "sFile: ")
@@ -28,16 +60,9 @@
       (goto-char origin-point)
       (org-insert-last-stored-link 1))))
 
-(defvar-keymap embark-consult-outline-map
-  :doc "Keymap for operating on org headings in consult-outline"
-  :parent embark-general-map
-  "L" #'steven-org-link-heading-here)
-
-;; does this need embark-consult?
-(add-to-list 'embark-keymap-alist '(consult-location . embark-consult-outline-map))
-
 ;; Stolen from kathinks
 ;; Embark actions for this buffer/file
+;;;###autoload
 (defun embark-target-this-buffer-file ()
       (cons 'this-buffer-file (buffer-name)))
 
@@ -71,11 +96,12 @@
           (define-key map (kbd key) command))
         map))
 
-(defun embark-act-with-completing-read (&optional arg)
-      (interactive "P")
-      (let* ((embark-prompter 'embark-completing-read-prompter)
-             (embark-indicators '(embark-minimal-indicator)))
-        (embark-act arg)))
+
+;; (defun embark-act-with-completing-read (&optional arg)
+;;       (interactive "P")
+;;       (let* ((embark-prompter 'embark-completing-read-prompter)
+;;              (embark-indicators '(embark-minimal-indicator)))
+;;         (embark-act arg)))
 
 (provide 'embark-extras)
 ;;embark-extras.el ends here
