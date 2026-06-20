@@ -36,6 +36,44 @@
         "You are an expert in emacs lisp. Answer only in lisp code, no explanations needed")
 
 ;;;###autoload
+(defun steven-gptel-define (text)
+  "Define TEXT using gptel — works on a word, phrase, name, or longer passage.
+Without a region, falls back to the word at point."
+  (interactive
+   (list
+    (if (use-region-p)
+        (prog1 (buffer-substring-no-properties (region-beginning) (region-end))
+          (deactivate-mark))
+      (or (thing-at-point 'word t)
+          (read-string "Define: ")))))
+  (let ((trimmed (string-trim text)))
+    (when (string-empty-p trimmed) (user-error "Nothing to define"))
+    (message "Defining "%s"…"
+             (truncate-string-to-width trimmed 50 nil nil "…"))
+    (gptel-request
+     trimmed
+     :system (steven--gptel-read-prompt
+              (expand-file-name "~/.config/emacs/prompts/define-this.txt"))
+     :callback
+     (lambda (response info)
+       (if (not (stringp response))
+           (message "gptel-define failed: %s" (plist-get info :status))
+         (with-current-buffer (get-buffer-create "*Definition*")
+           (let ((inhibit-read-only t))
+             (erase-buffer)
+             (insert response)
+             (goto-char (point-min))
+             (org-mode)
+             (visual-line-mode)
+             (read-only-mode 1))
+           (display-buffer
+            (current-buffer)
+            '((display-buffer-in-side-window)
+              (side . right)
+              (window-width . 0.5)
+              (slot . 0)))))))))
+
+;;;###autoload
 (defun steven-gptel-switch-backend ()
   (interactive)
   (let* ((choice
@@ -88,17 +126,18 @@
               (slot . 0)))))))))
 
 ;;;###autoload
-(defun steven-gptel-prompt-and-respond (region-text instruction)
-  "Send REGION-TEXT with INSTRUCTION to gptel and display the response.
-REGION-TEXT is captured first so Embark can supply it as the target."
+(defun steven-gptel-quick (region-text)
+  "Send REGION-TEXT with an instruction to gptel and display the response.
+REGION-TEXT is the sole interactive argument so Embark can supply it as the
+target; the instruction is always read from the minibuffer inside the body."
   (interactive
    (list
     (if (use-region-p)
         (prog1 (buffer-substring-no-properties (region-beginning) (region-end))
           (deactivate-mark))
-      "")
-    (read-string "Instruction: ")))
-  (let* ((system-prompt (alist-get
+      "")))
+  (let* ((instruction (read-string "Instruction: "))
+         (system-prompt (alist-get
                          (if (derived-mode-p 'text-mode)
                              'default-writing-short
                            'default-emacs-short)
@@ -112,14 +151,11 @@ REGION-TEXT is captured first so Embark can supply it as the target."
      :system system-prompt
      :callback
      (lambda (response info)
-       (if (not response)
-           (message "gptel-prompt-and-respond failed: %s" (plist-get info :status))
+       (if (not (stringp response))
+           (message "gptel-quick failed: %s" (plist-get info :status))
          (with-current-buffer (get-buffer-create "*The Response*")
            (let ((inhibit-read-only t))
              (erase-buffer)
-             ;(insert "* Prompt\n\n" instruction "\n")
-             ;(unless (string-empty-p region-text)
-             ;  (insert "\n** Region\n\n" region-text "\n"))
              (insert response)
              (goto-char (point-min))
              (org-mode)

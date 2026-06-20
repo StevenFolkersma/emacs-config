@@ -1448,7 +1448,6 @@ If region is active, add its contents to the new buffer."
   (:map embark-region-map
         ("m" . center-region) ; m for middle
         ("=" . quick-calc))
-        ;("x" . steven-gptel-prompt-and-respond))
   (:map embark-file-map
         ("L" . load-file)
         ("C" . steven-embark-copy-file-or-directory)) ;from embark-extras
@@ -1969,11 +1968,11 @@ Otherwise rename to:
   (:map embark-identifier-map
         ("e" . steven-gptel-lookup))
   (:map embark-region-map
-        ("x" . steven-gptel-prompt-and-respond))
+        ("x" . steven-gptel-quick))
   (:map global-gptel-map
         ("b" . steven-gptel-switch-backend)
         ("e" . steven-gptel-lookup) ;etmology lookup
-        ("p" . steven-gptel-prompt-and-respond)))
+        ("p" . steven-gptel-quick)))
 
 (use-package center-document-mode
   ;:hook ((org-mode . center-document-mode)

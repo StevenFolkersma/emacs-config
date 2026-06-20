@@ -1676,6 +1676,157 @@ Dired subtree is to show subtrees of folder with TAB
 
 #+end_src
 
+** The =init.el= section on dwim-shell-command and image-extras
+#+begin_src emacs-lisp :tangle "init.el"
+;; Image related dwim commands are in image-extras.el
+(use-package dwim-shell-command
+  :ensure t)
+
+(use-package image-extras
+  :bind (("C-c i w" . steven-image-insert-wikimedia) ;; obsolete
+         ("C-c i l" . steven-image-insert-local)
+         ("C-c i s" . steven-image-wikimedia-search)
+         ("C-c i y" . steven-image-yank)))
+#+end_src
+
+** The =image-extras.el= section defining image helpers
+
+#+begin_src emacs-lisp :tangle "steven/image-extras.el"
+;;; -*- lexical-binding: t -*-
+
+(defun steven-image--images-dir ()
+  "Return (and create) the images/ dir.
+Uses the project root when inside a project, otherwise the current file's directory."
+  (unless buffer-file-name (user-error "Buffer has no associated file"))
+  (let* ((project (project-current))
+         (base (if project
+                   (project-root project)
+                 (file-name-directory buffer-file-name)))
+         (dir (expand-file-name "images" base)))
+    (make-directory dir t)
+    dir))
+
+(defun steven-image--insert-link (dest)
+  "Insert an Org file link for DEST relative to the current file, then refresh."
+  (insert (format "[[file:%s]]"
+                  (file-relative-name dest (file-name-directory buffer-file-name))))
+  (when (fboundp 'org-display-inline-images)
+    (org-display-inline-images)))
+
+;; This function basically just inserts a relative path, but also copies the  ;; file to the /images folder 
+;;;###autoload
+(defun steven-image-insert-local (src)
+  "Copy SRC to the images/ folder and insert an Org link at point."
+  (interactive
+   (list (read-file-name "Image: " nil nil t nil
+                         (lambda (f)
+                           (string-match-p
+                            "\\.\\(png\\|jpg\\|jpeg\\|gif\\|webp\\|svg\\)\\'" f)))))
+  (let* ((dir (steven-image--images-dir))
+         (dest (expand-file-name (file-name-nondirectory src) dir)))
+    (copy-file src dest t)
+    (steven-image--insert-link dest)))
+
+(defun steven-image--parse-wikimedia-link (str)
+  "Extract the filename from a Wikimedia [[File:NAME|ALT]] string."
+  (when (string-match "\\[\\[File:\\([^|\\]]+\\)" str)
+    (match-string 1 str)))
+
+;;;###autoload
+(defun steven-image-insert-wikimedia (link)
+  "Download a Wikimedia Commons image from LINK and insert as an Org link.
+LINK is wikitext format: [[File:Foo.jpg|Alt]] or just the bare filename."
+  (interactive "sWikimedia wikitext link: ")
+  (let* ((filename (or (steven-image--parse-wikimedia-link link)
+                       (string-trim link)))
+         (encoded  (url-hexify-string (string-replace " " "_" filename)))
+         (url      (concat "https://commons.wikimedia.org/wiki/Special:FilePath/" encoded))
+         (dest     (expand-file-name (file-name-nondirectory filename)
+                                     (steven-image--images-dir))))
+    (message "Downloading %s …" filename)
+    (url-copy-file url dest t)
+    (steven-image--insert-link dest)))
+
+;;;###autoload
+(defun steven-image-wikimedia-search (query)
+  "Search Wikimedia Commons for QUERY in eww (MediaSearch)."
+  (interactive "sSearch Wikimedia Commons: ")
+  (eww (concat "https://commons.wikimedia.org/w/index.php?search="
+               (url-hexify-string query)
+               "&title=Special:MediaSearch&type=image")))
+
+;;;###autoload
+(defun steven-image-yank ()
+  "Insert an image from the kill ring as an Org link.
+
+Two cases are handled:
+- Kill ring entry has a `display' property containing image data (e.g. copied
+  from eww): saves that data to images/ and prompts for a filename.
+- Kill ring entry is a plain string that looks like a Wikimedia filename
+  (e.g. \"Belo Horizonte Skyline.jpg\"): downloads it from Commons."
+  (interactive)
+  (let* ((text     (current-kill 0 t))
+         (display  (get-text-property 0 'display text))
+         (img-spec (and (listp display) (eq (car display) 'image) display)))
+    (cond
+     (img-spec
+      (let* ((type (plist-get (cdr img-spec) :type))
+             (data (plist-get (cdr img-spec) :data))
+             (file (plist-get (cdr img-spec) :file))
+             (ext  (if type (symbol-name type) "jpg"))
+             (name (read-string (format "Filename (default: image.%s): " ext)
+                                nil nil (concat "image." ext)))
+             (name (if (string-match-p "\\.[a-zA-Z]\\{2,4\\}\\'" name)
+                       name
+                     (concat name "." ext)))
+             (dir  (steven-image--images-dir))
+             (dest (expand-file-name name dir)))
+        (cond
+         (data (with-temp-buffer
+                 (set-buffer-multibyte nil)
+                 (insert data)
+                 (write-region (point-min) (point-max) dest)))
+         (file (copy-file file dest t))
+         (t    (user-error "Cannot extract image data from kill ring")))
+        (steven-image--insert-link dest)))
+     ((and (stringp text)
+           (string-match-p "\\.[a-zA-Z]\\{2,4\\}\\'" (string-trim text)))
+      (steven-image-insert-wikimedia (string-trim text)))
+     (t
+      (user-error "Kill ring does not contain image data or a recognisable filename")))))
+
+;;;###autoload
+(defun steven-image-convert-to-jpg ()
+  "Convert marked Dired image(s) to JPEG using ImageMagick."
+  (interactive)
+  (dwim-shell-command-on-marked-files
+   "Convert to JPEG"
+   "convert <<f>> <<fne>>.jpg"
+   :utils "convert"))
+
+;;;###autoload
+(defun steven-image-convert-to-png ()
+  "Convert marked Dired image(s) to PNG using ImageMagick."
+  (interactive)
+  (dwim-shell-command-on-marked-files
+   "Convert to PNG"
+   "convert <<f>> <<fne>>.png"
+   :utils "convert"))
+
+;;;###autoload
+(defun steven-image-resize (max-px)
+  "Resize marked Dired image(s) to fit within MAX-PX × MAX-PX.
+Keeps aspect ratio and never upscales. Appends _<max-px> to the filename."
+  (interactive "nMax dimension (px): ")
+  (dwim-shell-command-on-marked-files
+   (format "Resize to %dpx" max-px)
+   (format "convert <<f>> -resize '%dx%d>' <<fne>>_%d.<<e>>" max-px max-px max-px)
+   :utils "convert"))
+
+(provide 'image-extras)
+;;; image-extras.el ends here
+#+end_src
+
 ** The =dired-extras.el= section defining custom dired functions
 
 This part is copied from the config of Prot, this can be used to limit
@@ -3315,8 +3466,6 @@ I need to check how the :bind setup works, it might load the libraries not how I
   :bind
   ("C-." . embark-act)
   ("C-;" . embark-dwim)
-  (:map embark-general-map
-        ("x" . steven-gptel-prompt-and-respond))
   (:map minibuffer-local-map
         ("C-c C-c" . embark-collect)
         ("C-c C-e" . embark-export)
@@ -3343,7 +3492,6 @@ I need to check how the :bind setup works, it might load the libraries not how I
   (:map embark-region-map
         ("m" . center-region) ; m for middle
         ("=" . quick-calc))
-        ;("x" . steven-gptel-prompt-and-respond))
   (:map embark-file-map
         ("L" . load-file)
         ("C" . steven-embark-copy-file-or-directory)) ;from embark-extras
@@ -4412,17 +4560,20 @@ better with Linux.
   :after (gptel embark)
   :bind
   (:map embark-identifier-map
-        ("e" . steven-gptel-lookup))
+        ("e" . steven-gptel-lookup)
+        ("d" . steven-gptel-define))
   (:map embark-region-map
-        ("x" . steven-gptel-prompt-and-respond))
+        ("x" . steven-gptel-quick)
+        ("d" . steven-gptel-define))
   (:map global-gptel-map
         ("b" . steven-gptel-switch-backend)
         ("e" . steven-gptel-lookup) ;etmology lookup
-        ("p" . steven-gptel-prompt-and-respond)))
+        ("p" . steven-gptel-quick)
+        ("d" . steven-gptel-define)))
 
 #+end_src
 word
-** The =gtpel-extras.el= section for gptel extras
+** The =gtpel-extras.el= section nfor gptel extras
 This is a way to pop a custom buffer via a function, via [[https://github.com/karthink/gptel/wiki/Defining-custom-gptel-commands][Defining custom
 gptel commands · karthink/gptel Wiki · GitHub]].
 
@@ -4466,6 +4617,44 @@ To make it use another function, I need to define some presets.
         "You are an expert in emacs lisp. Answer only in lisp code, no explanations needed")
 
 ;;;###autoload
+;;;###autoload
+(defun steven-gptel-define (text)
+  "Define TEXT using gptel — works on a word, phrase, name, or longer passage.
+Without a region, falls back to the word at point."
+  (interactive
+   (list
+    (if (use-region-p)
+        (prog1 (buffer-substring-no-properties (region-beginning) (region-end))
+          (deactivate-mark))
+      (or (thing-at-point 'word t)
+          (read-string "Define: ")))))
+  (let ((trimmed (string-trim text)))
+    (when (string-empty-p trimmed) (user-error "Nothing to define"))
+    (message "Defining "%s"…"
+             (truncate-string-to-width trimmed 50 nil nil "…"))
+    (gptel-request
+     trimmed
+     :system (steven--gptel-read-prompt
+              (expand-file-name "~/.config/emacs/prompts/define-this.txt"))
+     :callback
+     (lambda (response info)
+       (if (not (stringp response))
+           (message "gptel-define failed: %s" (plist-get info :status))
+         (with-current-buffer (get-buffer-create "*Definition*")
+           (let ((inhibit-read-only t))
+             (erase-buffer)
+             (insert response)
+             (goto-char (point-min))
+             (org-mode)
+             (visual-line-mode)
+             (read-only-mode 1))
+           (display-buffer
+            (current-buffer)
+            '((display-buffer-in-side-window)
+              (side . right)
+              (window-width . 0.5)
+              (slot . 0)))))))))
+
 (defun steven-gptel-switch-backend ()
   (interactive)
   (let* ((choice
@@ -4518,17 +4707,18 @@ To make it use another function, I need to define some presets.
               (slot . 0)))))))))
 
 ;;;###autoload
-(defun steven-gptel-prompt-and-respond (region-text instruction)
-  "Send REGION-TEXT with INSTRUCTION to gptel and display the response.
-REGION-TEXT is captured first so Embark can supply it as the target."
+(defun steven-gptel-quick (region-text)
+  "Send REGION-TEXT with an instruction to gptel and display the response.
+REGION-TEXT is the sole interactive argument so Embark can supply it as the
+target; the instruction is always read from the minibuffer inside the body."
   (interactive
    (list
     (if (use-region-p)
         (prog1 (buffer-substring-no-properties (region-beginning) (region-end))
           (deactivate-mark))
-      "")
-    (read-string "Instruction: ")))
-  (let* ((system-prompt (alist-get
+      "")))
+  (let* ((instruction (read-string "Instruction: "))
+         (system-prompt (alist-get
                          (if (derived-mode-p 'text-mode)
                              'default-writing-short
                            'default-emacs-short)
@@ -4542,14 +4732,11 @@ REGION-TEXT is captured first so Embark can supply it as the target."
      :system system-prompt
      :callback
      (lambda (response info)
-       (if (not response)
-           (message "gptel-prompt-and-respond failed: %s" (plist-get info :status))
+       (if (not (stringp response))
+           (message "gptel-quick failed: %s" (plist-get info :status))
          (with-current-buffer (get-buffer-create "*The Response*")
            (let ((inhibit-read-only t))
              (erase-buffer)
-             ;(insert "* Prompt\n\n" instruction "\n")
-             ;(unless (string-empty-p region-text)
-             ;  (insert "\n** Region\n\n" region-text "\n"))
              (insert response)
              (goto-char (point-min))
              (org-mode)
