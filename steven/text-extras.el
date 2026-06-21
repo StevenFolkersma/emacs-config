@@ -17,6 +17,7 @@
 ;;;###autoload
 (defun steven-scroll-down-quarter-screen ()
   (interactive)
+
   (scroll-up-command (steven-scroll--quarter-screen-lines)))
 
 ;;;###autoload

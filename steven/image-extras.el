@@ -34,15 +34,19 @@ Uses the project root when inside a project, otherwise the current file's direct
     (steven-image--insert-link dest)))
 
 (defun steven-image--parse-wikimedia-link (str)
-  "Extract the filename from a Wikimedia [[File:NAME|ALT]] string."
-  (when (string-match "\\[\\[File:\\([^|\\]]+\\)" str)
-    (match-string 1 str)))
+  "Extract the bare filename from a Wikimedia reference STR.
+Handles full page URLs, [[File:NAME|ALT]] wikitext, and bare filenames."
+  (cond
+   ((string-match "wikimedia\\.org/wiki/File:\\([^?#]+\\)" str)
+    (url-unhex-string (match-string 1 str)))
+   ((string-match "\\[\\[File:\\([^|\\]]+\\)" str)
+    (match-string 1 str))))
 
 ;;;###autoload
 (defun steven-image-insert-wikimedia (link)
   "Download a Wikimedia Commons image from LINK and insert as an Org link.
-LINK is wikitext format: [[File:Foo.jpg|Alt]] or just the bare filename."
-  (interactive "sWikimedia wikitext link: ")
+LINK can be a full Commons page URL, [[File:Foo.jpg|Alt]] wikitext, or bare filename."
+  (interactive "sWikimedia link or filename: ")
   (let* ((filename (or (steven-image--parse-wikimedia-link link)
                        (string-trim link)))
          (encoded  (url-hexify-string (string-replace " " "_" filename)))
@@ -53,6 +57,34 @@ LINK is wikitext format: [[File:Foo.jpg|Alt]] or just the bare filename."
     (url-copy-file url dest t)
     (steven-image--insert-link dest)))
 
+(defun steven-image--eww-wikimedia-url (text)
+  "Return a Wikimedia Commons file page URL from eww text properties of TEXT, or nil.
+Checks shr-url (set on hyperlinks) and help-echo (set on unloaded image placeholders)."
+  (or (let ((url (get-text-property 0 'shr-url text)))
+        (when (and (stringp url)
+                   (string-match-p "wikimedia\\.org/wiki/File:" url))
+          url))
+      (when-let* ((echo (get-text-property 0 'help-echo text))
+                  (_ (stringp echo))
+                  (_ (string-match "https://commons\\.wikimedia\\.org/wiki/File:[^ )#?]+" echo)))
+        (match-string 0 echo))))
+
+(defun steven-image--clipboard-file ()
+  "Return a local image file path from the system clipboard, or nil.
+Checks the text/uri-list clipboard target for a file:// URI pointing to an image."
+  (when (fboundp 'gui-get-selection)
+    (when-let* ((raw (ignore-errors
+                       (gui-get-selection 'CLIPBOARD (intern "text/uri-list"))))
+                (_ (stringp raw)))
+      (cl-some (lambda (uri)
+                 (let ((uri (string-trim uri)))
+                   (when (string-prefix-p "file://" uri)
+                     (let ((path (url-unhex-string (substring uri 7))))
+                       (when (and (file-exists-p path)
+                                  (string-match-p "\\.\\(png\\|jpg\\|jpeg\\|gif\\|webp\\|svg\\)\\'" path))
+                         path)))))
+               (split-string raw "[\r\n]+" t)))))
+
 ;;;###autoload
 (defun steven-image-wikimedia-search (query)
   "Search Wikimedia Commons for QUERY in eww (MediaSearch)."
@@ -61,19 +93,103 @@ LINK is wikitext format: [[File:Foo.jpg|Alt]] or just the bare filename."
                (url-hexify-string query)
                "&title=Special:MediaSearch&type=image")))
 
+(defvar steven-image--thumb-cache (make-hash-table :test 'equal)
+  "Cache of thumbnail URL -> Emacs image object, persists across picks.")
+
+(defun steven-image--wikimedia-search-results (query)
+  "Return alist of (FILENAME . THUMBURL) for QUERY via the Commons API."
+  (let* ((url  (concat "https://commons.wikimedia.org/w/api.php?"
+                       "action=query&generator=search"
+                       "&gsrsearch=FILE:" (url-hexify-string query)
+                       "&gsrnamespace=6&gsrlimit=20"
+                       "&prop=imageinfo&iiprop=url&iiurlwidth=200"
+                       "&format=json"))
+         (buf  (url-retrieve-synchronously url t t 10))
+         (json (with-current-buffer buf
+                 (goto-char (point-min))
+                 (re-search-forward "\n\n")
+                 (json-parse-buffer :object-type 'alist :array-type 'list)))
+         (pages (alist-get 'pages (alist-get 'query json))))
+    (kill-buffer buf)
+    (delq nil
+          (mapcar (lambda (entry)
+                    (let* ((page     (cdr entry))
+                           (title    (alist-get 'title page))
+                           (thumburl (alist-get 'thumburl (car (alist-get 'imageinfo page))))
+                           (name     (string-remove-prefix "File:" title)))
+                      (when (and name thumburl)
+                        (cons name thumburl))))
+                  pages))))
+
+(defun steven-image--fetch-thumb (url)
+  "Return a cached Emacs image for thumbnail URL, fetching on first call."
+  (or (gethash url steven-image--thumb-cache)
+      (when-let ((buf (ignore-errors (url-retrieve-synchronously url t t 5))))
+        (unwind-protect
+            (with-current-buffer buf
+              (set-buffer-multibyte nil)
+              (goto-char (point-min))
+              (when (re-search-forward "\r?\n\r?\n" nil t)
+                (let ((img (create-image (buffer-substring (point) (point-max)) nil t)))
+                  (puthash url img steven-image--thumb-cache)
+                  img)))
+          (kill-buffer buf)))))
+
+;;;###autoload
+(defun steven-image-wikimedia-pick (query)
+  "Search Wikimedia Commons for QUERY and pick an image with live preview."
+  (interactive "sSearch Wikimedia Commons: ")
+  (require 'consult)
+  (let* ((results  (steven-image--wikimedia-search-results query))
+         (prev-buf (get-buffer-create " *steven-image-preview*"))
+         (prev-win nil)
+         (state    (lambda (action cand)
+                     (pcase action
+                       ('preview
+                        (when cand
+                          (with-current-buffer prev-buf
+                            (let ((inhibit-read-only t))
+                              (erase-buffer)
+                              (if-let ((img (steven-image--fetch-thumb
+                                             (cdr (assoc cand results)))))
+                                  (insert-image img)
+                                (insert "fetching…"))))
+                          (unless (window-live-p prev-win)
+                            (setq prev-win
+                                  (display-buffer
+                                   prev-buf
+                                   '(display-buffer-in-side-window
+                                     (side . right) (window-width . 35)))))))
+                       ('exit
+                        (when (window-live-p prev-win)
+                          (delete-window prev-win))
+                        (when (buffer-live-p prev-buf)
+                          (kill-buffer prev-buf))))))
+         (pick     (consult--read
+                    (mapcar #'car results)
+                    :prompt (format "Image [%s]: " query)
+                    :state state
+                    :require-match t)))
+    (when pick
+      (steven-image-insert-wikimedia pick))))
+
 ;;;###autoload
 (defun steven-image-yank ()
-  "Insert an image from the kill ring as an Org link.
+  "Insert an image from the kill ring or clipboard as an Org link.
 
-Two cases are handled:
+Three cases are handled:
 - Kill ring entry has a `display' property containing image data (e.g. copied
   from eww): saves that data to images/ and prompts for a filename.
-- Kill ring entry is a plain string that looks like a Wikimedia filename
-  (e.g. \"Belo Horizonte Skyline.jpg\"): downloads it from Commons."
+- System clipboard has a file:// URI pointing to a local image (e.g. copied
+  from a file manager): copies the file to images/ and inserts a link.
+- Kill ring entry is a plain string that looks like a Wikimedia URL or filename:
+  downloads it from Commons."
   (interactive)
-  (let* ((text     (current-kill 0 t))
-         (display  (get-text-property 0 'display text))
-         (img-spec (and (listp display) (eq (car display) 'image) display)))
+  (let* ((text      (current-kill 0 t))
+         (display   (get-text-property 0 'display text))
+         (img-spec  (and (listp display) (eq (car display) 'image) display))
+         (eww-url   (unless img-spec (steven-image--eww-wikimedia-url text)))
+         (clip-file (unless (or img-spec eww-url) (steven-image--clipboard-file))))
     (cond
      (img-spec
       (let* ((type (plist-get (cdr img-spec) :type))
@@ -94,6 +210,13 @@ Two cases are handled:
                  (write-region (point-min) (point-max) dest)))
          (file (copy-file file dest t))
          (t    (user-error "Cannot extract image data from kill ring")))
+        (steven-image--insert-link dest)))
+     (eww-url
+      (steven-image-insert-wikimedia eww-url))
+     (clip-file
+      (let* ((dir  (steven-image--images-dir))
+             (dest (expand-file-name (file-name-nondirectory clip-file) dir)))
+        (copy-file clip-file dest t)
         (steven-image--insert-link dest)))
      ((and (stringp text)
            (string-match-p "\\.[a-zA-Z]\\{2,4\\}\\'" (string-trim text)))

@@ -437,7 +437,7 @@ If region is active, add its contents to the new buffer."
 
 (setq display-line-numbers-type t)
 (setq-default truncate-lines nil)
-(global-hl-line-mode 1)
+;(global-hl-line-mode 1)
 
 ;; turn on truncation in prog mode
 (use-package text-mode
@@ -456,9 +456,9 @@ If region is active, add its contents to the new buffer."
 
 (use-package text-extras
   :bind
-  (("C-v" . steven-scroll-down-quarter-screen)
-   ("M-v" . steven-scroll-up-quarter-screen)
-   ("M-q" . steven-cycle-paragraph)
+  (("C-v" . steven-move-down-quarter-screen)
+   ("M-v" . steven-move-up-quarter-screen)
+   ("M-q" . my-cycle-paragraph)
    :map org-mode-map
    ("<f6>" . OSPV-mode)))
 
@@ -646,10 +646,21 @@ If region is active, add its contents to the new buffer."
 (use-package dwim-shell-command
   :ensure t)
 
+;;temp- this need to go to and .el file. Taken from xenodium
+(defun dwim-shell-commands-http-serve-dir ()
+  "HTTP serve current directory."
+  (interactive)
+  (dwim-shell-command-on-marked-files
+   "HTTP serve current dir"
+   "python3 -m http.server"
+   :utils "python3"
+   :focus-now t
+   :no-progress t))
+
 (use-package image-extras
-  :bind (("C-c i w" . steven-image-insert-wikimedia) ;; obsolete
-         ("C-c i l" . steven-image-insert-local)
+  :bind (("C-c i l" . steven-image-insert-local)
          ("C-c i s" . steven-image-wikimedia-search)
+         ("C-c i p" . steven-image-wikimedia-pick)
          ("C-c i y" . steven-image-yank)))
 
 (use-package colorful-mode
@@ -1987,3 +1998,10 @@ Otherwise rename to:
 
 (use-package show-font
   :ensure t)
+
+(use-package kobo-markings
+  :vc (:url "https://github.com/StevenFolkersma/kobo-markings.el.git"
+       :rev :newest)
+  :config
+  (setq kobo-db-path    "~/Documents/Projects/kobo-notes/KoboReader.sqlite"
+      kobo-output-file "~/Documents/Projects/kobo-notes/kobo.org"))

@@ -1,6 +1,6 @@
 
 ((nil . ((visual-line-mode . nil)
-         (auto-fill-mode)))
+         (eval . (auto-fill-mode 1)))))
 
 
 
