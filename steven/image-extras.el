@@ -19,6 +19,7 @@ Uses the project root when inside a project, otherwise the current file's direct
   (when (fboundp 'org-display-inline-images)
     (org-display-inline-images)))
 
+;; This function basically just inserts a relative path, but also copies the  ;; file to the /images folder 
 ;;;###autoload
 (defun steven-image-insert-local (src)
   "Copy SRC to the images/ folder and insert an Org link at point."
@@ -51,6 +52,14 @@ LINK is wikitext format: [[File:Foo.jpg|Alt]] or just the bare filename."
     (message "Downloading %s …" filename)
     (url-copy-file url dest t)
     (steven-image--insert-link dest)))
+
+;;;###autoload
+(defun steven-image-wikimedia-search (query)
+  "Search Wikimedia Commons for QUERY in eww (MediaSearch)."
+  (interactive "sSearch Wikimedia Commons: ")
+  (eww (concat "https://commons.wikimedia.org/w/index.php?search="
+               (url-hexify-string query)
+               "&title=Special:MediaSearch&type=image")))
 
 ;;;###autoload
 (defun steven-image-yank ()
@@ -91,14 +100,6 @@ Two cases are handled:
       (steven-image-insert-wikimedia (string-trim text)))
      (t
       (user-error "Kill ring does not contain image data or a recognisable filename")))))
-
-;;;###autoload
-(defun steven-image-wikimedia-search (query)
-  "Search Wikimedia Commons for QUERY in eww (MediaSearch)."
-  (interactive "sSearch Wikimedia Commons: ")
-  (eww (concat "https://commons.wikimedia.org/w/index.php?search="
-               (url-hexify-string query)
-               "&title=Special:MediaSearch&type=image")))
 
 ;;;###autoload
 (defun steven-image-convert-to-jpg ()

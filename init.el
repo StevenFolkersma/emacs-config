@@ -642,6 +642,16 @@ If region is active, add its contents to the new buffer."
                   "epub"
                   "\\)")))
 
+;; Image related dwim commands are in image-extras.el
+(use-package dwim-shell-command
+  :ensure t)
+
+(use-package image-extras
+  :bind (("C-c i w" . steven-image-insert-wikimedia) ;; obsolete
+         ("C-c i l" . steven-image-insert-local)
+         ("C-c i s" . steven-image-wikimedia-search)
+         ("C-c i y" . steven-image-yank)))
+
 (use-package colorful-mode
   ;; :diminish
   :ensure t ; Optional
@@ -1420,8 +1430,6 @@ If region is active, add its contents to the new buffer."
   :bind
   ("C-." . embark-act)
   ("C-;" . embark-dwim)
-  (:map embark-general-map
-        ("x" . steven-gptel-prompt-and-respond))
   (:map minibuffer-local-map
         ("C-c C-c" . embark-collect)
         ("C-c C-e" . embark-export)
@@ -1838,19 +1846,13 @@ Otherwise rename to:
   (setq magit-section-visibility-indicator '(magit-fringe-bitmap> . magit-fringe-bitmapv))
   :config
   (setq git-commit-summary-max-length 50)
-  ;; NOTE 2023-01-24: I used to also include `overlong-summary-line'
-  ;; in this list, but I realised I do not need it.  My summaries are
-  ;; always in check.  When I exceed the limit, it is for a good
-  ;; reason.
   (setq git-commit-style-convention-checks '(non-empty-second-line))
-
   (setq magit-diff-refine-hunk t)
-
   ;; Show icons for files in the Magit status and other buffers.
   (with-eval-after-load 'magit
     (setq magit-format-file-function #'magit-format-file-nerd-icons)))
 
-(use-package magit-extras)
+(use-package steven-magit-extras)
 
 (setq auto-revert-interval 1)
 (global-auto-revert-mode 1)
@@ -1966,13 +1968,16 @@ Otherwise rename to:
   :after (gptel embark)
   :bind
   (:map embark-identifier-map
-        ("e" . steven-gptel-lookup))
+        ("e" . steven-gptel-lookup)
+        ("d" . steven-gptel-define))
   (:map embark-region-map
-        ("x" . steven-gptel-quick))
+        ("x" . steven-gptel-quick)
+        ("d" . steven-gptel-define))
   (:map global-gptel-map
         ("b" . steven-gptel-switch-backend)
         ("e" . steven-gptel-lookup) ;etmology lookup
-        ("p" . steven-gptel-quick)))
+        ("p" . steven-gptel-quick)
+        ("d" . steven-gptel-define)))
 
 (use-package center-document-mode
   ;:hook ((org-mode . center-document-mode)

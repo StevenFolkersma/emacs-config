@@ -36,6 +36,7 @@
         "You are an expert in emacs lisp. Answer only in lisp code, no explanations needed")
 
 ;;;###autoload
+;;;###autoload
 (defun steven-gptel-define (text)
   "Define TEXT using gptel — works on a word, phrase, name, or longer passage.
 Without a region, falls back to the word at point."
@@ -73,7 +74,6 @@ Without a region, falls back to the word at point."
               (window-width . 0.5)
               (slot . 0)))))))))
 
-;;;###autoload
 (defun steven-gptel-switch-backend ()
   (interactive)
   (let* ((choice

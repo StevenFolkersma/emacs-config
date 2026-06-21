@@ -2600,6 +2600,9 @@ generally the preferred way in anycase.
 #+begin_src emacs-lisp :tangle "personal/setup-export.el"
 ;;; -*- lexical-binding: t -*-
 
+(use-package htmlize
+  :ensure t)
+
 (setq org-publish-project-alist
       '(("recipebook-recipes"
          :base-directory "~/Documents/Recipebook/Recipes"
@@ -4335,23 +4338,17 @@ Some notes on settings:
   (setq magit-section-visibility-indicator '(magit-fringe-bitmap> . magit-fringe-bitmapv))
   :config
   (setq git-commit-summary-max-length 50)
-  ;; NOTE 2023-01-24: I used to also include `overlong-summary-line'
-  ;; in this list, but I realised I do not need it.  My summaries are
-  ;; always in check.  When I exceed the limit, it is for a good
-  ;; reason.
   (setq git-commit-style-convention-checks '(non-empty-second-line))
-
   (setq magit-diff-refine-hunk t)
-
   ;; Show icons for files in the Magit status and other buffers.
   (with-eval-after-load 'magit
     (setq magit-format-file-function #'magit-format-file-nerd-icons)))
 
-(use-package magit-extras)
+(use-package steven-magit-extras)
 
 #+end_src
 
-#+begin_src emacs-lisp :tangle "steven/magit-extras.el"
+#+begin_src emacs-lisp :tangle "steven/steven-magit-extras.el"
 ;;; -*- lexical-binding: t -*-
 
 ;;;###autoload
@@ -4372,8 +4369,8 @@ Some notes on settings:
   ;; Open commit buffer
   (magit-commit-create))
 
-(provide 'magit-extras)
-;;magit-extras ends here
+(provide 'steven-magit-extras)
+;;steven-magit-extras ends here
 #+end_src
 
 ** The =init.el= section on auto-revert
@@ -4897,6 +4894,18 @@ Fujifilm X-E3 guidance rules:
 - When giving settings, include a “starting point” configuration rather than absolute rules.
 #+end_src
 
+** The =socratic-extras.el= section for Socratic note questioning
+
+Sends the current note (or region) to the Claude Code CLI with a Socratic system
+prompt and a personal context file. Returns 3–5 probing questions into a
+=*Socratic Questions*= buffer. Edit =prompts/my-context.txt= to keep the context
+file current.
+
+#+begin_src emacs-lisp :tangle “init.el”
+(use-package socratic-extras
+  :bind ((“C-c a q” . steven-socratic-current-note)
+         (“C-c a Q” . steven-socratic-region)))
+#+end_src
 
 ** TODO The =init.el= section with center document mode
 This is copied from the 'Emacs From Scratch' series. See [[https://github.com/daviwil/emacs-from-scratch][GitHub - daviwil/emacs-from-scratch]]
