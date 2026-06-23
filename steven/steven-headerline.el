@@ -141,12 +141,9 @@ or nil."
 ;;    'face '(:weight bold)))
 
 (defun steven-header-line-ispell-dict ()
-  "Return an icon if Flyspell is active."
-  (when (and (bound-and-true-p flyspell-mode)
-             (bound-and-true-p ispell-current-dictionary))
-    (propertize ""
-     'face '(:weight bold)
-     )))
+  "Return an icon if Jinx is active."
+  (when (bound-and-true-p jinx-mode)
+    (propertize "" 'face '(:weight bold))))
 
 (defun steven--modeline-file-size ()
   "File size in human readable format"

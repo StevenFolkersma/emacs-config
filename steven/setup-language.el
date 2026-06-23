@@ -10,22 +10,18 @@
 
     ('english
      ;; Spell checking
-     (ispell-change-dictionary "en_GB")
+     (setq jinx-languages "en_GB")
+     (when (bound-and-true-p jinx-mode) (jinx-reload))
      (setq wiktionary-bro-language "en")
-     ;; Example future settings:
-     ;; (setq some-var ...)
-     ;; (setenv "LANG" "en_US.UTF-8")
-
+     (setq whisper-language "en")
      (message "Language set to English"))
 
     ('dutch
      ;; Spell checking
-     (ispell-change-dictionary "nl_NL")
+     (setq jinx-languages "nl_NL")
+     (when (bound-and-true-p jinx-mode) (jinx-reload))
      (setq wiktionary-bro-language "nl")
-     ;; Example future settings:
-     ;; (setq some-var ...)
-     ;; (setenv "LANG" "nl_NL.UTF-8")
-
+     (setq whisper-language "nl")
      (message "Language set to Dutch"))))
 
 ;;;###autoload

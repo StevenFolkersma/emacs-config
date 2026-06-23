@@ -137,7 +137,7 @@
             :header-line-height 1.0
             :mode-line-active-height 1.0
             :mode-line-inactive-height 1.0
-            :variable-pitch-family "Roboto Slab")
+            :variable-pitch-family "EB Garamond")
            (small-aporetic
             :inherit medium-aporetic
             :default-height 135)
@@ -161,13 +161,13 @@
             :default-height 200
             :header-line-height 1.0)
            (writing
-            :default-family "Roboto Slab"
-            :default-weight thin
+            :default-family "EB Garamond"
+            :default-weight normal
             :default-height 220
             :header-line-height 1.05
             :mode-line-active-height 1
             :mode-line-inactive-height 1
-            :variable-pitch-family "Roboto Slab")
+            :variable-pitch-family "EB Garamond")
            (t
             ;; I keep all properties for didactic purposes, but most can be
             ;; omitted.  See the fontaine manual for the technicalities:
@@ -462,6 +462,20 @@ If region is active, add its contents to the new buffer."
    :map org-mode-map
    ("<f6>" . OSPV-mode)))
 
+;; Need to find a better place for this still
+;; Define abbrevs for text-mode
+(define-abbrev-table 'text-mode-abbrev-table
+  '(
+    ("adv" "aan de hand van")
+    ("avk" "Annerveenschekanaal")
+    ("ehv" "Eindhoven")
+    ("mbt" "met betrekking tot")
+    ("emdash" "–")
+    ("cl-nat" "[[denote:20260601T072531][Nature]]")
+    ))
+
+(add-hook 'text-mode-hook #'abbrev-mode)
+
 (use-package visual-fill-column
   :ensure t)
 
@@ -696,28 +710,16 @@ If region is active, add its contents to the new buffer."
 (use-package define-word
   :ensure t)
 
-;; Use Hunspell as the spell-checker
-(use-package ispell
-  :ensure nil
-  :custom
-  (ispell-dictionary "nl_NL")
-  (flyspell-default-dictionary "nl_NL")
-  (ispell-local-dictionary-alist
-   '(("en_GB" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "en_GB") nil utf-8)
-     ("nl_NL" "[[:alpha:]]" "[^[:alpha:]]" "[']" nil ("-d" "nl_NL") nil utf-8)))
-  :config
-  (when (executable-find "hunspell")
-    (setq-default ispell-program-name "hunspell")
-    (setq ispell-really-hunspell t)))
-
-(use-package flyspell
-  :ensure nil
-  ;:hook (text-mode . flyspell-mode)
+(use-package jinx
+  :ensure t
+  :hook (text-mode . jinx-mode)
   :bind
-  ("<f7>" . flyspell-mode)
-  (:map flyspell-mode-map
-   ("C-." . nil)))
-;(add-hook 'text-mode-hook 'flyspell-mode)
+  ("<f7>" . jinx-mode)
+  ("M-$" . jinx-correct)
+  ("C-M-$" . jinx-correct-all)
+  ("C-;" . jinx-correct)
+  :custom
+  (jinx-languages "en_GB nl_NL"))
 
 (with-eval-after-load 'org
   (setq org-confirm-babel-evaluate nil)
@@ -988,13 +990,12 @@ If region is active, add its contents to the new buffer."
 (use-package consult-template
   :vc (:url "https://github.com/StevenFolkersma/consult-template.git" :rev :newest)
   :demand t
+  :bind (("C-c i i" . consult-template-insert) ;insert
+         ("C-c i c" . consult-template-define)) ;capture
   :custom
   ;; Where templates are persisted. Defaults to templates.el in
   ;; user-emacs-directory. Set this before the package loads.
-  (consult-templates-file "~/.config/emacs/my-templates.el")
-  :bind
-  ("C-c i i" . consult-template-insert)
-  ("C-c i d" . consult-template-define))
+  (consult-templates-file "~/.config/emacs/my-templates.el"))
 
 (use-package placeholder
   :vc (:url "https://github.com/oantolin/placeholder.git")
@@ -1987,7 +1988,7 @@ Otherwise rename to:
   (:map global-gptel-map
         ("b" . steven-gptel-switch-backend)
         ("e" . steven-gptel-lookup) ;etmology lookup
-        ("p" . steven-gptel-quick)
+        ("q" . steven-gptel-quick)
         ("d" . steven-gptel-define)))
 
 (use-package center-document-mode
@@ -1998,6 +1999,17 @@ Otherwise rename to:
 
 (use-package show-font
   :ensure t)
+
+(use-package whisper
+  :vc (:url "https://github.com/natrys/whisper.el" :rev :newest)
+  :bind ("<f12>" . whisper-run)
+  :config
+  (setopt whisper-install-directory    "~/.config/emacs/.cache/"
+          whisper-model                "small"
+          whisper-translate            nil
+          whisper-return-cursor        'end
+          whisper-use-threads          (1- (num-processors))
+          whisper--ffmpeg-input-device "alsa_input.pci-0000_e3_00.6.HiFi__Mic1__source"))
 
 (use-package kobo-markings
   :vc (:url "https://github.com/StevenFolkersma/kobo-markings.el.git"
