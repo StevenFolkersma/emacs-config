@@ -53,5 +53,5 @@
     (when frame
       (select-frame-set-input-focus frame))))
 
-(provide 'frame-extras.el)
+(provide 'frame-extras)
 ;;frame-extras ends here

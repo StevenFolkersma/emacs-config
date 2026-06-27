@@ -79,7 +79,7 @@ PGTK is the Wayland-specific build of Emacs.")
                                  (menu-bar-lines . 0)
                                  (tool-bar-lines . 0)
                                  (vertical-scroll-bars . nil)
-                                 (scroll-bar-width . (if steven-pgtk-p 12 6))
+                                 (scroll-bar-width . ,(if steven-pgtk-p 12 6))
                                  (width . (text-pixels . 800))
                                  (height . (text-pixels . 950))
                                  ;,@(when steven-pgtk-p

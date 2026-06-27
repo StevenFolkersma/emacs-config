@@ -48,13 +48,27 @@
               select-enable-clipboard t)  
 
 
+;remove disable commands
+(dolist (cmd '(narrow-to-region
+               upcase-region
+               downcase-region
+               dired-find-alternate-file
+               LaTeX-narrow-to-environment
+               TeX-narrow-to-group
+               narrow-to-page
+               set-goal-column
+               scroll-left
+               scroll-right))
+  (put cmd 'disabled nil))
+(put 'suspend-frame 'disabled t)
+
 ;; below are default settings needed on macOS
-(if (eq system-type 'darwin)
-    (progn
-      (setq dired-use-ls-dired t)
-      (setq insert-directory-program "/usr/local/bin/gls")
-      (setq with-editor-emacsclient-executable
-            "/usr/local/bin/emacsclient")))
+;; (if (eq system-type 'darwin)
+;;     (progn
+;;       (setq dired-use-ls-dired t)
+;;       (setq insert-directory-program "/usr/local/bin/gls")
+;;       (setq with-editor-emacsclient-executable
+;;             "/usr/local/bin/emacsclient")))
 
 (use-package bind-key
   :bind (:map help-map ("y" . describe-personal-keybindings)))
@@ -132,12 +146,13 @@
             :variable-pitch-family "Roboto Slab")
            (medium-aporetic
             :default-family "Aporetic Sans Mono"
-            :default-height 180
-            :line-spacing 2
+            :default-height 165
+            :line-spacing 1
             :header-line-height 1.0
             :mode-line-active-height 1.0
             :mode-line-inactive-height 1.0
-            :variable-pitch-family "EB Garamond")
+            :variable-pitch-family "EB Garamond"
+            :variable-pitch-height 1.5)
            (small-aporetic
             :inherit medium-aporetic
             :default-height 135)
@@ -163,7 +178,7 @@
            (writing
             :default-family "EB Garamond"
             :default-weight normal
-            :default-height 220
+            :default-height 200
             :header-line-height 1.05
             :mode-line-active-height 1
             :mode-line-inactive-height 1
@@ -263,79 +278,107 @@
   (setq doric-themes-to-toggle '(doric-light doric-dark))
   (setq doric-themes-to-rotate doric-themes-collection))
 
+(use-package keycast
+  :vc (:url "https://github.com/tarsius/keycast.git")
+  :bind (:map toggle-map
+              ("k" . keycast-mode-line-mode)
+              ("h" . keycast-header-line-mode))
+  :config
+  (setq keycast-mode-line-insert-after 'steven--mode-line-anchor)
+  (setq keycast-mode-line-remove-tail-elements nil)
+  (define-advice embark-keymap-prompter
+      (:filter-return (cmd) store-action-key+cmd)
+    (force-mode-line-update t)
+    (setq this-command cmd
+          keycast--this-command-keys (this-single-command-keys)
+          keycast--this-command-desc cmd))
+  (define-advice embark-act (:before (&rest _) force-keycast-update)
+    (keycast--update)))
+
+(add-to-list 'load-path "/home/steven/Documents/Projects/steven-modeline")
+(require 'setup-modeline-new)
+
+;(steven-headerline-default)   ;; project/buffer-name header (Denote-aware)
+;(steven-modeline-default)     ;; full status mode-line
+(steven-apply-line-layout)    ;; install the default (mode-only) layout
+
 (use-package spacious-padding
   :ensure t
-  :demand t
   :config
-  (defvar steven-spacious-padding-default-widths
-    '(:internal-border-width 20
-      :header-line-width 4
-      :mode-line-width 1
-      :custom-button-width 0
-      :tab-width 4
-      :right-divider-width 30
-      :scroll-bar-width 8
-      :fringe-width 0))
+  ;; These are the default values, but I keep them here for visibility.
+  ;; Also check `spacious-padding-subtle-frame-lines'.
+  (setq spacious-padding-widths
+        '( :internal-border-width 15
+           :header-line-width 4
+           :mode-line-width 0
+           :custom-button-width 3
+           :tab-width 4
+           :right-divider-width 25
+           :scroll-bar-width 8
+           :fringe-width 20))
 
-  (defvar steven-spacious-padding-default-lines
-    '(:mode-line-active header-line
-      :mode-line-inactive header-line-inactive
-      :header-line-active header-line
-      :header-line-inactive header-line-inactive))
+  (spacious-padding-mode 1)
 
-  (defvar steven-spacious-padding-minimal-widths
-    '(:internal-border-width 20
-      :header-line-width 0
-      :mode-line-width 0
-      :custom-button-width 0
-      :tab-width 4
-      :right-divider-width 30
-      :scroll-bar-width 8
-      :fringe-width 0))
+  ;; Set a key binding if you need to toggle spacious padding.
+  (define-key global-map (kbd "<f8>") #'spacious-padding-mode))
 
-  (defvar steven-spacious-padding-minimal-lines
-    nil)
+(defun steven--modus-headerline-faces (&rest _)
+  (modus-themes-with-colors
+    (custom-set-faces
+     `(mode-line-maker-padding-face ((t 
+                              :underline nil
+                              :foreground ,bg-main
+                              :box nil
+                              :background ,bg-main)))
+     `(steven-modeline-indicator-bg ((t
+                        :background ,bg-cyan-intense)))
+     `(header-line ((t 
+                            :foreground ,fg-main
+                            :background ,bg-main
+                            ;:box (:line-width 1 :color ,fg-mode-line-active)
+                            :box nil
+                            :underline (:color ,fg-main :position t)
+                            ;:underline ,fg-main
+                            )))
+     `(header-line-inactive ((t 
+                            :foreground ,fg-mode-line-inactive
+                            :background ,bg-main
+                            ;:box (:line-width 1 :color ,fg-mode-line-inactive)
+                            :box nil
+                            :underline (:color ,fg-mode-line-inactive :position t))))
+     )))
 
-  (defun steven-apply-spacious-padding-default ()
-    "Apply the default spacious padding style."
-    (interactive)
-    (setq spacious-padding-widths
-          steven-spacious-padding-default-widths)
-    (setq spacious-padding-subtle-frame-lines
-          steven-spacious-padding-default-lines)
-    (spacious-padding-mode -1)
-    (spacious-padding-mode 1))
+(defun steven--doric-headerline-faces (&rest _)
+  (doric-themes-with-colors
+    (custom-set-faces
+     `(mode-line-maker-padding-face ((t 
+                         :underline nil
+                         :foreground ,bg-main
+                         :box nil
+                         :background ,bg-main)))
+     `(steven-modeline-indicator-bg ((t
+                        :background ,bg-cyan)))
+     `(header-line ((t 
+                            :foreground ,fg-main
+                            :background ,bg-main
+                            ;:box (:line-width 1 :color ,fg-main)
+                            :box nil
+                            :underline (:color ,fg-main :position t)
+                            ;:underline ,fg-main
+                            )))
+     `(header-line-inactive ((t 
+                            :foreground ,bg-neutral
+                            :background ,bg-main
+                            ;:box (:line-width 1 :color ,fg-shadow-subtle)
+                            :box nil
+                            :underline (:color ,bg-neutral :position t)
+                            ;:underline ,bg-neutral
+                            )))
+     )))
 
-  (defun steven-apply-spacious-padding-minimal ()
-    "Apply the minimal spacious padding style."
-    (interactive)
-    (setq spacious-padding-widths
-          steven-spacious-padding-minimal-widths)
-    (setq spacious-padding-subtle-frame-lines
-          steven-spacious-padding-minimal-lines)
-    (spacious-padding-mode -1)
-    (spacious-padding-mode 1)))
 
-(steven-apply-spacious-padding-default)
-
-;(steven-apply-spacious-padding)
-
-;(global-set-key (kbd "C-c t p")
-;                #'steven-toggle-spacious-padding)
-
-;(define-key global-map (kbd "<f8>") #'spacious-padding-mode)
-
-(use-package setup-modeline
-  :demand t ;;make sure it always load and config is ran
-  :bind (("<f10>" . steven-toggle-headerline)
-         ("<f8>" . steven-toggle-modeline))
-  :hook ((doric-themes-after-load-theme . steven--doric-headerline-faces)
-         (modus-themes-after-load-theme . steven--modus-headerline-faces))
-  :config
-  (setq steven-modeline-style 'default
-        steven-headerline-style 'default)
-  (steven-apply-headerline)
-  (steven-apply-modeline))
+(add-hook 'doric-themes-after-load-theme-hook #'steven--doric-headerline-faces)
+(add-hook 'modus-themes-after-load-theme-hook #'steven--modus-headerline-faces)
 
 (use-package theme-extras
   :demand t
@@ -371,7 +414,6 @@
            ("a" . auto-fill-mode)
            ("o" . olivetti-mode)
            ("w" . steven-toggle-frame-width)
-           ("i" . whitespace-mode)
            ("v" . visual-line-mode)
            ("i" . visual-fill-column-mode)
            ("c" . center-document-mode)
@@ -585,6 +627,107 @@ If region is active, add its contents to the new buffer."
 (setq lazy-count-prefix-format "(%s/%s) ")
 (setq lazy-count-suffix-format nil)
 
+;;;###autoload
+  (defun my/isearch-forward-other-buffer (prefix)
+    "`isearch-forward' in the next window.
+
+With PREFIX arg, search in the previous window."
+    (interactive "P")
+    (unless (one-window-p)
+      (with-selected-window
+          (or (and other-window-scroll-default
+                   (funcall other-window-scroll-default))
+              (if prefix (previous-window) (next-window)))
+        (isearch-forward))))
+  
+;;;###autoload
+  (defun my/isearch-backward-other-buffer (prefix)
+    "Function to isearch-backward in other-window."
+    (interactive "P")
+    (unless (one-window-p)
+      (save-excursion
+        (let ((next (if prefix 1 -1)))
+          (other-window next)
+          (isearch-backward)
+          (other-window (- next))
+          ))))
+
+  (defvar my/search-url-regexp
+    (concat
+     "\\b\\(\\(www\\.\\|\\(s?https?\\|ftp\\|file\\|gopher\\|"
+     "nntp\\|news\\|telnet\\|wais\\|mailto\\|info\\):\\)"
+     "\\(//[-a-z0-9_.]+:[0-9]*\\)?"
+     (let ((chars "-a-z0-9_=#$@~%&*+\\/[:word:]")
+	   (punct "!?:;.,"))
+       (concat
+        "\\(?:"
+        ;; Match paired parentheses, e.g. in Wikipedia URLs:
+        ;; http://thread.gmane.org/47B4E3B2.3050402@gmail.com
+        "[" chars punct "]+" "(" "[" chars punct "]+" ")"
+        "\\(?:" "[" chars punct "]+" "[" chars "]" "\\)?"
+        "\\|"
+        "[" chars punct "]+" "[" chars "]"
+        "\\)"))
+     "\\)")
+    "Regular expression that matches URLs.
+Copy of variable `browse-url-button-regexp'.")
+
+  (autoload 'goto-address-mode "goto-addr")
+
+;;;###autoload
+  (defun my/search-occur-urls ()
+    "Produce buttonised list of all URLs in the current buffer."
+    (interactive)
+    (add-hook 'occur-hook #'goto-address-mode)
+    (occur my/search-url-regexp "\\&")
+    (remove-hook 'occur-hook #'goto-address-mode))
+
+;;;###autoload
+  (defun ffap-menu-eww (&optional use-generic-p)
+    "Point browser at a URL in the buffer using completion.
+Which web browser to use depends on the value of the variable
+`browse-url-browser-function'.
+
+Also see `my/search-occur-url'."
+    (interactive "P")
+    (let ((match nil)
+          (match-data nil)
+          (context
+           (lambda (beg &optional shrp)
+             (let* ((before (string-replace
+                             "\n" ""
+                             (buffer-substring-no-properties
+                              beg (max (line-beginning-position) (- beg 30)))))
+                    (link (string-replace
+                           "\n" "" (buffer-substring-no-properties beg (point))))
+                    (after (buffer-substring-no-properties
+                            (point) (min (line-end-position) (+ (point) 30)))))
+               (concat (propertize " " 'display '(space :align-to 65))
+                       (propertize (concat "…" before) 'face 'shadow)
+                       (if shrp
+                           (propertize link 'face '(:inherit shadow :weight bold
+                                                    :underline t))
+                         link)
+                       (propertize (concat after "…") 'face 'shadow))))))
+      (save-excursion
+        (goto-char (point-min))
+        (while (search-forward-regexp my/search-url-regexp nil t)
+          (push (cons (match-string-no-properties 0)
+                      (funcall context (match-beginning 0)))
+                match-data))
+        (goto-char (point-min))
+        (while (setq match (text-property-search-forward 'shr-url nil nil))
+          (push (cons (prop-match-value match)
+                      (funcall context (prop-match-beginning match) 'shrp))
+                match-data)))
+      (let* ((completion-extra-properties
+              `(:annotation-function
+                ,(lambda (cand) (concat " " (cdr (assoc cand match-data))))))
+             (url (completing-read "Browse URL: " match-data nil t)))
+        (if use-generic-p
+            (browse-url-generic url)
+          (browse-url url)))))
+
 (use-package dired
     :ensure nil
     :commands (dired)
@@ -671,6 +814,15 @@ If region is active, add its contents to the new buffer."
    :focus-now t
    :no-progress t))
 
+(defun dwim-shell-commands-markdown-to-org ()
+  "Convert Markdown file(s) to Org."
+  (interactive)
+  (dwim-shell-command-on-marked-files
+   "markdown to org"
+   "pandoc --from=markdown --to=org '<<f>>' > '<<fne>>.org'"
+   :extensions "md"
+   :utils "pandoc"))
+
 (use-package image-extras
   :bind (("C-c i l" . steven-image-insert-local)
          ("C-c i s" . steven-image-wikimedia-search)
@@ -712,12 +864,12 @@ If region is active, add its contents to the new buffer."
 
 (use-package jinx
   :ensure t
-  :hook (text-mode . jinx-mode)
+  ;:hook (text-mode . jinx-mode)
   :bind
   ("<f7>" . jinx-mode)
-  ("M-$" . jinx-correct)
-  ("C-M-$" . jinx-correct-all)
-  ("C-;" . jinx-correct)
+  ;("M-$" . jinx-correct)
+  ("M-$" . jinx-correct-all)
+  ("M-\\" . jinx-correct)
   :custom
   (jinx-languages "en_GB nl_NL"))
 
@@ -740,7 +892,15 @@ If region is active, add its contents to the new buffer."
 
 (use-package savehist 
   :ensure nil ; it is built-in 
-  :hook (after-init . recentf-mode))
+  :hook (after-init . savehist-mode))
+
+(use-package recentf
+  :ensure nil ; built-in
+  :hook (after-init . recentf-mode)
+  :custom
+  (recentf-max-saved-items 250)      ; save up to 500 files
+  (recentf-max-menu-items 50)        ; menu size
+  (recentf-auto-cleanup 'never))     ; avoid slow cleanup on startup
 
 (use-package minibuffer
   :bind
@@ -891,41 +1051,41 @@ If region is active, add its contents to the new buffer."
           (tags-todo "inbox"
                      ((org-agenda-prefix-format "  %?-12t% s")
                       (org-agenda-overriding-header "\nInbox\n")))
-     (org-link-set-parameters
-        "org-title"
-        :store (defun store-org-title-link ()
-                 "Store a link to the org file visited in the current buffer.
-     Use the #+TITLE as the link description. The link is only stored
-     if `org-store-link' is called from the #+TITLE line."
-                 (when (and (derived-mode-p 'org-mode)
-                            (save-excursion
-                              (beginning-of-line)
-                              (looking-at "#\\+\\(?:TITLE\\|title\\):")))
-                   (org-link-store-props
-                    :type "file"
-                    :link (concat "file:" (buffer-file-name))
-                    :description (cadar (org-collect-keywords '("TITLE")))))))
           )))))
+
+(org-link-set-parameters
+   "org-title"
+   :store (defun store-org-title-link ()
+            "Store a link to the org file visited in the current buffer.
+Use the #+TITLE as the link description. The link is only stored
+if `org-store-link' is called from the #+TITLE line."
+            (when (and (derived-mode-p 'org-mode)
+                       (save-excursion
+                         (beginning-of-line)
+                         (looking-at "#\\+\\(?:TITLE\\|title\\):")))
+              (org-link-store-props
+               :type "file"
+               :link (concat "file:" (buffer-file-name))
+               :description (cadar (org-collect-keywords '("TITLE")))))))
 
 (use-package org-modern
   :ensure t
   :after org
   :config
-  ;; Use custom symbols for heading stars
-  (setq org-modern-star '("" "" "" "" "" ""))
-
   ;; Hide the original asterisks
-  (setq org-modern-hide-stars nil)
+  
   (setq org-modern-star 'replace)
-  ;;(setq org-hide-leading-stars t) Already set in main org settings
-
+  (setq org-modern-hide-stars 'leading)
+  
+  ;(setq org-hide-leading-stars t)
   ;; Keep indentation reasonable
   (setq org-indent-indentation-per-level 2)
 
   ;; Disable other org-modern features
-  (setq org-modern-table nil)
+  (setq org-modern-table t)
   (setq org-modern-list nil)
-  (setq org-modern-block-name nil)
+  (setq org-modern-block-name t)
+  ;(setq org-modern-block-fringe 0)
   (setq org-modern-checkbox nil)
   (setq org-modern-priority nil)
   (setq org-modern-tag nil)
@@ -934,9 +1094,9 @@ If region is active, add its contents to the new buffer."
   (setq org-modern-todo nil)
   (setq org-modern-horizontal-rule nil))
 
-(add-hook 'org-modern-mode-hook
-          (lambda ()
-            (setq org-hide-leading-stars org-modern-mode)))
+;; (add-hook 'org-modern-mode-hook
+;;           (lambda ()
+;;             (setq org-hide-leading-stars org-modern-mode)))
 (add-hook 'org-mode-hook #'org-modern-mode)
 
   (use-package org-capture
@@ -1031,8 +1191,7 @@ If region is active, add its contents to the new buffer."
   ("C-," . consult-register-load)
   ("C-M-," . consult-register)
   (:map goto-map
-        ("l" . consult-line)
-        ("M-l" . consult-line)
+        ("l" . steven-follow-buffer-link)
         ("L" . consult-line-multi)
         ("i" . consult-imenu)
         ("o" . consult-outline)
@@ -1043,6 +1202,9 @@ If region is active, add its contents to the new buffer."
         ("h" . consult-org-heading))
   (:map search-map
         ("f" . consult-find)
+        ("l" . consult-line)
+        ("M-l" . consult-line)
+        ("L" . consult-line-multi)
         ("M-f" . consult-find)
         ("s" . consult-outline)
         ("M-s" . consult-outline)
@@ -1141,7 +1303,7 @@ If region is active, add its contents to the new buffer."
   (consult-customize
    steven--consult-wrapper
    :state (consult--file-preview))
-  (setq consult-dir-default-command #'steven--consult-wrapper))
+  (setq consult-dir-default-command #'find-file))
   ;;(consult-customize
   ;;   consult-find
   ;;   :preview-key '(:debounce 0.4 any)))
@@ -1203,9 +1365,9 @@ If region is active, add its contents to the new buffer."
     ;; `denote-infer-keywords' to be nil and `denote-known-keywords' to
 
     ;; have the keywords you need.
-    (setq denote-known-keywords '("emacs" "idea" "note" "recipe" "bikes" "config"))
+    (setq denote-known-keywords '("fragment" "journal" "poem" "fiction" "story"))
     (setq denote-infer-keywords t)
-    (setq denote-sort-keywords t)
+    (setq denote-sort-keywords nil)
     (setq denote-rename-confirmations nil)
     (setq denote-buffer-name-prefix "") ; to identify all Denote buffers
     (setq denote-rename-buffer-format "%D")
@@ -1351,8 +1513,8 @@ If region is active, add its contents to the new buffer."
   :commands vertico-multiform-mode
   :after vertico
   :bind (:map vertico-map
-              ("C-l" . vertico-multiform-flat)
-              ("M-q" . vertico-multiform-unobtrusive)
+              ("M-q" . vertico-multiform-flat)
+              ("C-l" . vertico-multiform-unobtrusive)
               ("C-M-l" . embark-export))
   :init (vertico-multiform-mode 1)
   :config
@@ -1381,8 +1543,7 @@ If region is active, add its contents to the new buffer."
            (org-refile reverse)
            (org-agenda-refile reverse)
            (org-capture-refile reverse)
-           (execute-extended-command unobtrusive)
-           (dired-goto-file flat)
+           (execute-extended-command flat)
            (consult-project-buffer flat)
            (consult-dir-maybe reverse)
            (consult-dir reverse)
@@ -1464,7 +1625,7 @@ If region is active, add its contents to the new buffer."
         ("m" . center-line) ;c is taken by capatilize. m for middle
         ("d" . dictionary-search)
         ("w" . wiktionary-bro))
-        ;("e" . steven-gptel-lookup)) ;etmology search with gptel
+        ;("e" . steven-gptel-lookup)) ;set in gptel setup
   (:map embark-region-map
         ("m" . center-region) ; m for middle
         ("=" . quick-calc))
@@ -1568,7 +1729,7 @@ If region is active, add its contents to the new buffer."
 
   (setf (alist-get ?  avy-dispatch-alist) 'avy-action-mark-to-char)
   :custom
-  (avy-timeout-seconds 0.6)       ; how long to wait for input in char-timer
+  (avy-timeout-seconds 0.4)       ; how long to wait for input in char-timer
   (avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l)) ; home row keys for jump labels
   (avy-style 'at-full)            ; show label over full target word
   (avy-background t))             ; dim background during selection
@@ -1809,8 +1970,8 @@ Otherwise rename to:
               (format "*shell %s*" dir-name))))
       (rename-buffer new-name t))))
 
-(add-hook 'shell-mode-hook #'steven--shell-rename-buffer)
-(add-hook 'eshell-mode-hook #'steven--shell-rename-buffer)
+;(add-hook 'shell-mode-hook #'steven--shell-rename-buffer)
+;(add-hook 'eshell-mode-hook #'steven--shell-rename-buffer)
 
 (use-package eat
   :ensure t

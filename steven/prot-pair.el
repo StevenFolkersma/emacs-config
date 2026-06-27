@@ -169,7 +169,7 @@ controlled by `delete-pair-blink-delay'."
 
 (bind-key "C-'" #'prot-pair-insert)
 (bind-key "M-'" #'prot-pair-insert-directly)
-(bind-key "M-\\" #'prot-pair-delete)
+;(bind-key "M-\\" #'prot-pair-delete)
 
 (provide 'prot-pair)
 ;;; prot-pair.el ends here

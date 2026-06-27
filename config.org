@@ -6,7 +6,11 @@
 
 * My literal emacs configuration
 
-This file describes my emacs configuration. Feel free to copy parts of the configuration, I do not recommend copying it in full as it contains many personal functions that will mostly likely not work for everyone. The config is heavily inspired by (and parts are copied from) the configs of Prot, karthinks and oantolin.
+This file describes my emacs configuration. Feel free to copy parts of the
+configuration, I do not recommend copying it in full as it contains many
+personal functions that will mostly likely not work for everyone. The config
+is heavily inspired by (and parts are copied from) the configs of Prot,
+karthinks and oantolin.
 
 * The pre initialization of emacs (=early-init.el=)
 
@@ -117,7 +121,7 @@ PGTK is the Wayland-specific build of Emacs.")
                                  (menu-bar-lines . 0)
                                  (tool-bar-lines . 0)
                                  (vertical-scroll-bars . nil)
-                                 (scroll-bar-width . (if steven-pgtk-p 12 6))
+                                 (scroll-bar-width . ,(if steven-pgtk-p 12 6))
                                  (width . (text-pixels . 800))
                                  (height . (text-pixels . 950))
                                  ;,@(when steven-pgtk-p
@@ -269,13 +273,27 @@ indent-tabs-mode, if non-nil, indentation can insert tabs.
               select-enable-clipboard t)  
 
 
+;remove disable commands
+(dolist (cmd '(narrow-to-region
+               upcase-region
+               downcase-region
+               dired-find-alternate-file
+               LaTeX-narrow-to-environment
+               TeX-narrow-to-group
+               narrow-to-page
+               set-goal-column
+               scroll-left
+               scroll-right))
+  (put cmd 'disabled nil))
+(put 'suspend-frame 'disabled t)
+
 ;; below are default settings needed on macOS
-(if (eq system-type 'darwin)
-    (progn
-      (setq dired-use-ls-dired t)
-      (setq insert-directory-program "/usr/local/bin/gls")
-      (setq with-editor-emacsclient-executable
-            "/usr/local/bin/emacsclient")))
+;; (if (eq system-type 'darwin)
+;;     (progn
+;;       (setq dired-use-ls-dired t)
+;;       (setq insert-directory-program "/usr/local/bin/gls")
+;;       (setq with-editor-emacsclient-executable
+;;             "/usr/local/bin/emacsclient")))
 #+end_src
 
 ** The =setup-basics.el= with simple conevenience commands
@@ -596,12 +614,13 @@ Trying out Fontaine package by Prot
             :variable-pitch-family "Roboto Slab")
            (medium-aporetic
             :default-family "Aporetic Sans Mono"
-            :default-height 180
-            :line-spacing 2
+            :default-height 165
+            :line-spacing 1
             :header-line-height 1.0
             :mode-line-active-height 1.0
             :mode-line-inactive-height 1.0
-            :variable-pitch-family "EB Garamond")
+            :variable-pitch-family "EB Garamond"
+            :variable-pitch-height 1.5)
            (small-aporetic
             :inherit medium-aporetic
             :default-height 135)
@@ -627,7 +646,7 @@ Trying out Fontaine package by Prot
            (writing
             :default-family "EB Garamond"
             :default-weight normal
-            :default-height 220
+            :default-height 200
             :header-line-height 1.05
             :mode-line-active-height 1
             :mode-line-inactive-height 1
@@ -750,6 +769,9 @@ together with the Nano modeline
 (defun steven--modus-themes-custom-faces (&rest _)
   (modus-themes-with-colors
     (custom-set-faces
+     `(fringe ((t :inherit default)))
+     `(olivetti-fringe ((t :inherit fringe)))
+     `(region ((t :extend nil))) ; extend region bg only untill fill column width
      ;`(fringe ((t :background ,bg-main :foreground ,bg-main)))
      ;`(window-divider ((t :background ,bg-main :foreground ,bg-main)))
      ;`(window-divider-first-pixel ((t :background ,bg-main :foreground ,bg-main)))
@@ -759,6 +781,7 @@ together with the Nano modeline
 (defun steven--doric-themes-custom-faces (&rest _)
   (doric-themes-with-colors
     (custom-set-faces
+     `(olivetti-fringe ((t :inherit fringe)))
      `(region ((t :extend nil))) ; extend region bg only untill fill column width
      ;`(fringe ((t :background ,bg-main :foreground ,bg-main)))
      `(orderless-match-face-0 ((t :inherit bold :foreground ,fg-shadow-subtle)))
@@ -823,14 +846,14 @@ toggle to switch between a minimal and default version. This is because
 in some cases I want to have a box around the header-line which is
 overwritten if *:header-line-width* is non-zero.
 
-#+begin_src emacs-lisp :tangle "init.el"
+#+begin_src emacs-lisp
 (use-package spacious-padding
   :ensure t
   :demand t
   :config
   (defvar steven-spacious-padding-default-widths
     '(:internal-border-width 20
-      :header-line-width 4
+      :header-line-width 6
       :mode-line-width 1
       :custom-button-width 0
       :tab-width 4
@@ -880,17 +903,29 @@ overwritten if *:header-line-width* is non-zero.
 (steven-apply-spacious-padding-default)
 #+end_src
 
+** The =init.el= section on trying out keycast
+
 #+begin_src emacs-lisp :tangle "init.el"
+(use-package keycast
+  :vc (:url "https://github.com/tarsius/keycast.git")
+  :bind (:map toggle-map
+              ("k" . keycast-mode-line-mode)
+              ("h" . keycast-header-line-mode))
+  :config
+  (setq keycast-mode-line-insert-after 'steven--mode-line-anchor)
+  (setq keycast-mode-line-remove-tail-elements nil)
+  (define-advice embark-keymap-prompter
+      (:filter-return (cmd) store-action-key+cmd)
+    (force-mode-line-update t)
+    (setq this-command cmd
+          keycast--this-command-keys (this-single-command-keys)
+          keycast--this-command-desc cmd))
+  (define-advice embark-act (:before (&rest _) force-keycast-update)
+    (keycast--update)))
 
-;(steven-apply-spacious-padding)
-
-;(global-set-key (kbd "C-c t p")
-;                #'steven-toggle-spacious-padding)
-
-;(define-key global-map (kbd "<f8>") #'spacious-padding-mode)
 #+end_src
 
-** TODO The =init.el= section to setup the modeline
+** The =init.el= section to setup the modeline
 I use a custom modeline, for which all the backend technicalities are
 set in [[*The =steven-modeline.el= section][The =steven-modeline.el= section]]. Here I just
 setup the defaults and a toggle function.
@@ -1154,7 +1189,101 @@ Can be either 'default or 'minimal.")
 ;;setup-modeline.el ends here
 #+end_src
 
+** =init= on loading modeline with use-package
+
+The fancy new one:
+
 #+begin_src emacs-lisp :tangle "init.el"
+(add-to-list 'load-path "/home/steven/Documents/Projects/steven-modeline")
+(require 'setup-modeline-new)
+
+;(steven-headerline-default)   ;; project/buffer-name header (Denote-aware)
+;(steven-modeline-default)     ;; full status mode-line
+(steven-apply-line-layout)    ;; install the default (mode-only) layout
+
+(use-package spacious-padding
+  :ensure t
+  :config
+  ;; These are the default values, but I keep them here for visibility.
+  ;; Also check `spacious-padding-subtle-frame-lines'.
+  (setq spacious-padding-widths
+        '( :internal-border-width 15
+           :header-line-width 4
+           :mode-line-width 0
+           :custom-button-width 3
+           :tab-width 4
+           :right-divider-width 25
+           :scroll-bar-width 8
+           :fringe-width 20))
+
+  (spacious-padding-mode 1)
+
+  ;; Set a key binding if you need to toggle spacious padding.
+  (define-key global-map (kbd "<f8>") #'spacious-padding-mode))
+
+(defun steven--modus-headerline-faces (&rest _)
+  (modus-themes-with-colors
+    (custom-set-faces
+     `(mode-line-maker-padding-face ((t 
+                              :underline nil
+                              :foreground ,bg-main
+                              :box nil
+                              :background ,bg-main)))
+     `(steven-modeline-indicator-bg ((t
+                        :background ,bg-cyan-intense)))
+     `(header-line ((t 
+                            :foreground ,fg-main
+                            :background ,bg-main
+                            ;:box (:line-width 1 :color ,fg-mode-line-active)
+                            :box nil
+                            :underline (:color ,fg-main :position t)
+                            ;:underline ,fg-main
+                            )))
+     `(header-line-inactive ((t 
+                            :foreground ,fg-mode-line-inactive
+                            :background ,bg-main
+                            ;:box (:line-width 1 :color ,fg-mode-line-inactive)
+                            :box nil
+                            :underline (:color ,fg-mode-line-inactive :position t))))
+     )))
+
+(defun steven--doric-headerline-faces (&rest _)
+  (doric-themes-with-colors
+    (custom-set-faces
+     `(mode-line-maker-padding-face ((t 
+                         :underline nil
+                         :foreground ,bg-main
+                         :box nil
+                         :background ,bg-main)))
+     `(steven-modeline-indicator-bg ((t
+                        :background ,bg-cyan)))
+     `(header-line ((t 
+                            :foreground ,fg-main
+                            :background ,bg-main
+                            ;:box (:line-width 1 :color ,fg-main)
+                            :box nil
+                            :underline (:color ,fg-main :position t)
+                            ;:underline ,fg-main
+                            )))
+     `(header-line-inactive ((t 
+                            :foreground ,bg-neutral
+                            :background ,bg-main
+                            ;:box (:line-width 1 :color ,fg-shadow-subtle)
+                            :box nil
+                            :underline (:color ,bg-neutral :position t)
+                            ;:underline ,bg-neutral
+                            )))
+     )))
+
+
+(add-hook 'doric-themes-after-load-theme-hook #'steven--doric-headerline-faces)
+(add-hook 'modus-themes-after-load-theme-hook #'steven--modus-headerline-faces)
+
+#+end_src
+
+The old one:
+
+#+begin_src emacs-lisp
 (use-package setup-modeline
   :demand t ;;make sure it always load and config is ran
   :bind (("<f10>" . steven-toggle-headerline)
@@ -1271,7 +1400,6 @@ This is copied from the config of oantolin
            ("a" . auto-fill-mode)
            ("o" . olivetti-mode)
            ("w" . steven-toggle-frame-width)
-           ("i" . whitespace-mode)
            ("v" . visual-line-mode)
            ("i" . visual-fill-column-mode)
            ("c" . center-document-mode)
@@ -1559,10 +1687,12 @@ Check [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Buffer-Display
   (setq trashed-date-format "%Y-%m-%d %H:%M:%S"))
 #+end_src
 
-** TODO The =init.el= section on isearch
+** The =init.el= section on isearch
 
 This is entirely copied from the config of Prot. More info can be found
 there. I have kept some of his documentation below.
+
+I now add some stuff from Karthinks, worth checking out (the functions)
 
 #+begin_src emacs-lisp :tangle "init.el"
 
@@ -1578,6 +1708,107 @@ there. I have kept some of his documentation below.
 (setq isearch-lazy-count t)
 (setq lazy-count-prefix-format "(%s/%s) ")
 (setq lazy-count-suffix-format nil)
+
+;;;###autoload
+  (defun my/isearch-forward-other-buffer (prefix)
+    "`isearch-forward' in the next window.
+
+With PREFIX arg, search in the previous window."
+    (interactive "P")
+    (unless (one-window-p)
+      (with-selected-window
+          (or (and other-window-scroll-default
+                   (funcall other-window-scroll-default))
+              (if prefix (previous-window) (next-window)))
+        (isearch-forward))))
+  
+;;;###autoload
+  (defun my/isearch-backward-other-buffer (prefix)
+    "Function to isearch-backward in other-window."
+    (interactive "P")
+    (unless (one-window-p)
+      (save-excursion
+        (let ((next (if prefix 1 -1)))
+          (other-window next)
+          (isearch-backward)
+          (other-window (- next))
+          ))))
+
+  (defvar my/search-url-regexp
+    (concat
+     "\\b\\(\\(www\\.\\|\\(s?https?\\|ftp\\|file\\|gopher\\|"
+     "nntp\\|news\\|telnet\\|wais\\|mailto\\|info\\):\\)"
+     "\\(//[-a-z0-9_.]+:[0-9]*\\)?"
+     (let ((chars "-a-z0-9_=#$@~%&*+\\/[:word:]")
+	   (punct "!?:;.,"))
+       (concat
+        "\\(?:"
+        ;; Match paired parentheses, e.g. in Wikipedia URLs:
+        ;; http://thread.gmane.org/47B4E3B2.3050402@gmail.com
+        "[" chars punct "]+" "(" "[" chars punct "]+" ")"
+        "\\(?:" "[" chars punct "]+" "[" chars "]" "\\)?"
+        "\\|"
+        "[" chars punct "]+" "[" chars "]"
+        "\\)"))
+     "\\)")
+    "Regular expression that matches URLs.
+Copy of variable `browse-url-button-regexp'.")
+
+  (autoload 'goto-address-mode "goto-addr")
+
+;;;###autoload
+  (defun my/search-occur-urls ()
+    "Produce buttonised list of all URLs in the current buffer."
+    (interactive)
+    (add-hook 'occur-hook #'goto-address-mode)
+    (occur my/search-url-regexp "\\&")
+    (remove-hook 'occur-hook #'goto-address-mode))
+
+;;;###autoload
+  (defun ffap-menu-eww (&optional use-generic-p)
+    "Point browser at a URL in the buffer using completion.
+Which web browser to use depends on the value of the variable
+`browse-url-browser-function'.
+
+Also see `my/search-occur-url'."
+    (interactive "P")
+    (let ((match nil)
+          (match-data nil)
+          (context
+           (lambda (beg &optional shrp)
+             (let* ((before (string-replace
+                             "\n" ""
+                             (buffer-substring-no-properties
+                              beg (max (line-beginning-position) (- beg 30)))))
+                    (link (string-replace
+                           "\n" "" (buffer-substring-no-properties beg (point))))
+                    (after (buffer-substring-no-properties
+                            (point) (min (line-end-position) (+ (point) 30)))))
+               (concat (propertize " " 'display '(space :align-to 65))
+                       (propertize (concat "…" before) 'face 'shadow)
+                       (if shrp
+                           (propertize link 'face '(:inherit shadow :weight bold
+                                                    :underline t))
+                         link)
+                       (propertize (concat after "…") 'face 'shadow))))))
+      (save-excursion
+        (goto-char (point-min))
+        (while (search-forward-regexp my/search-url-regexp nil t)
+          (push (cons (match-string-no-properties 0)
+                      (funcall context (match-beginning 0)))
+                match-data))
+        (goto-char (point-min))
+        (while (setq match (text-property-search-forward 'shr-url nil nil))
+          (push (cons (prop-match-value match)
+                      (funcall context (prop-match-beginning match) 'shrp))
+                match-data)))
+      (let* ((completion-extra-properties
+              `(:annotation-function
+                ,(lambda (cand) (concat " " (cdr (assoc cand match-data))))))
+             (url (completing-read "Browse URL: " match-data nil t)))
+        (if use-generic-p
+            (browse-url-generic url)
+          (browse-url url)))))
 #+end_src
 
 The first thing I want to do for Isearch, is make it more convenient
@@ -1604,6 +1835,108 @@ We have the option to place this information after the search terms,
 though I prefer to have them as a prefix so as not to interfere with
 what I am typing.
   
+** =The =init.el= with custom ffap-menu function
+
+#+begin_src emacs-lisp 
+;;; ffap-menu-ext.el --- Extensible ffap-menu  -*- lexical-binding:t; -*-
+
+(require 'ffap)
+(require 'subr-x)
+
+(defgroup ffap-menu-ext nil
+  "Extensible ffap-menu."
+  :group 'ffap)
+
+(defcustom ffap-menu-collector-functions
+  '(ffap-menu-collect-regexp)
+  "Functions used to collect ffap-menu candidates.
+
+Each function is called with no arguments in the current buffer and
+returns a list of (DISPLAY . TARGET) pairs."
+  :type 'hook)
+
+(defun ffap-menu--collect ()
+  "Collect candidates from all collectors."
+  (delete-dups
+   (apply #'append
+          (mapcar #'funcall ffap-menu-collector-functions))))
+
+;;; Default collector
+
+(defun ffap-menu-collect-regexp ()
+  "Collect URLs and file names using `ffap-menu-regexp'."
+  (let (result)
+    (save-excursion
+      (goto-char (point-min))
+      (while (re-search-forward ffap-menu-regexp nil t)
+        (let ((thing (match-string-no-properties 0)))
+          (push (cons thing thing) result))))
+    (nreverse result)))
+
+;;; SHR collector
+
+(defun ffap-menu-collect-shr-links ()
+  "Collect links stored in the `shr-url' text property."
+  (let (result)
+    (save-excursion
+      (goto-char (point-min))
+      (while (< (point) (point-max))
+        (when-let ((url (get-text-property (point) 'shr-url)))
+          (push (cons url url) result))
+        (goto-char
+         (or (next-single-property-change
+              (point) 'shr-url nil (point-max))
+             (point-max)))))
+    (nreverse (delete-dups result))))
+
+;;; Denote collector
+
+(with-eval-after-load 'denote
+
+  (defun ffap-menu-collect-denote-links ()
+    "Collect Denote links in the current buffer."
+    (let (result)
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward "denote:\\([[:alnum:]_-]+\\)" nil t)
+          (when-let* ((id (match-string-no-properties 1))
+                      (file (ignore-errors
+                              (denote-get-path-by-id id))))
+            (push (cons (format "denote:%s" id)
+                        file)
+                  result))))
+      (nreverse result)))
+
+  (add-to-list 'ffap-menu-collector-functions
+               #'ffap-menu-collect-denote-links))
+
+(add-to-list 'ffap-menu-collector-functions
+             #'ffap-menu-collect-shr-links)
+
+;;; Prototype command
+
+(defun ffap-menu-ext ()
+  "Like `ffap-menu', but supports extensible collectors."
+  (interactive)
+  (let* ((candidates (ffap-menu--collect))
+         (choice
+          (completing-read
+           "Find: "
+           (mapcar #'car candidates)
+           nil t))
+         (target (cdr (assoc choice candidates))))
+    (cond
+     ((null target)
+      (user-error "No selection"))
+     ((string-match-p "\\`[a-zA-Z][-+.a-zA-Z0-9]*://" target)
+      (browse-url target))
+     (t
+      (find-file target)))))
+
+;(provide 'ffap-menu-ext)
+
+;;; ffap-menu-ext.el ends here
+#+end_src
 
 ** The =init.el= setup of dired
 
@@ -1708,6 +2041,15 @@ Dired subtree is to show subtrees of folder with TAB
    :utils "python3"
    :focus-now t
    :no-progress t))
+
+(defun dwim-shell-commands-markdown-to-org ()
+  "Convert Markdown file(s) to Org."
+  (interactive)
+  (dwim-shell-command-on-marked-files
+   "markdown to org"
+   "pandoc --from=markdown --to=org '<<f>>' > '<<fne>>.org'"
+   :extensions "md"
+   :utils "pandoc"))
 
 (use-package image-extras
   :bind (("C-c i l" . steven-image-insert-local)
@@ -2077,7 +2419,7 @@ the following default:
     ('english
      ;; Spell checking
      (setq jinx-languages "en_GB")
-     (when (bound-and-true-p jinx-mode) (jinx-reload))
+     (when (bound-and-true-p jinx-mode) (jinx-mode -1) (jinx-mode 1))
      (setq wiktionary-bro-language "en")
      (setq whisper-language "en")
      (message "Language set to English"))
@@ -2085,7 +2427,7 @@ the following default:
     ('dutch
      ;; Spell checking
      (setq jinx-languages "nl_NL")
-     (when (bound-and-true-p jinx-mode) (jinx-reload))
+     (when (bound-and-true-p jinx-mode) (jinx-mode -1) (jinx-mode 1))
      (setq wiktionary-bro-language "nl")
      (setq whisper-language "nl")
      (message "Language set to Dutch"))))
@@ -2158,7 +2500,7 @@ I am  with some tools:
   :ensure t)
 #+end_src
 
-** The =init.el= section to setup spell-checking
+** The =init.el= section to setup spell-checking with jinx
 
 Jinx is a fast spell-checker that uses =enchant-2= as its backend,
 which in turn uses hunspell. Both =en_GB= and =nl_NL= dictionaries are
@@ -2179,12 +2521,12 @@ Key bindings:
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package jinx
   :ensure t
-  :hook (text-mode . jinx-mode)
+  ;:hook (text-mode . jinx-mode)
   :bind
   ("<f7>" . jinx-mode)
-  ("M-$" . jinx-correct)
-  ("C-M-$" . jinx-correct-all)
-  ("C-;" . jinx-correct)
+  ;("M-$" . jinx-correct)
+  ("M-$" . jinx-correct-all)
+  ("M-\\" . jinx-correct)
   :custom
   (jinx-languages "en_GB nl_NL"))
 
@@ -2244,7 +2586,15 @@ access those through the `consult-buffer' interface or with `recentf-open' or
 #+begin_src emacs-lisp :tangle "init.el"
 (use-package savehist 
   :ensure nil ; it is built-in 
-  :hook (after-init . recentf-mode))
+  :hook (after-init . savehist-mode))
+
+(use-package recentf
+  :ensure nil ; built-in
+  :hook (after-init . recentf-mode)
+  :custom
+  (recentf-max-saved-items 250)      ; save up to 500 files
+  (recentf-max-menu-items 50)        ; menu size
+  (recentf-auto-cleanup 'never))     ; avoid slow cleanup on startup
 #+end_src
 
 
@@ -2456,21 +2806,24 @@ Org refiling is set like this, so I see the full path of the outline. To deal wi
           (tags-todo "inbox"
                      ((org-agenda-prefix-format "  %?-12t% s")
                       (org-agenda-overriding-header "\nInbox\n")))
-     (org-link-set-parameters
-        "org-title"
-        :store (defun store-org-title-link ()
-                 "Store a link to the org file visited in the current buffer.
-     Use the #+TITLE as the link description. The link is only stored
-     if `org-store-link' is called from the #+TITLE line."
-                 (when (and (derived-mode-p 'org-mode)
-                            (save-excursion
-                              (beginning-of-line)
-                              (looking-at "#\\+\\(?:TITLE\\|title\\):")))
-                   (org-link-store-props
-                    :type "file"
-                    :link (concat "file:" (buffer-file-name))
-                    :description (cadar (org-collect-keywords '("TITLE")))))))
           )))))
+#+end_src
+
+#+begin_src emacs-lisp :tangle "init.el"
+(org-link-set-parameters
+   "org-title"
+   :store (defun store-org-title-link ()
+            "Store a link to the org file visited in the current buffer.
+Use the #+TITLE as the link description. The link is only stored
+if `org-store-link' is called from the #+TITLE line."
+            (when (and (derived-mode-p 'org-mode)
+                       (save-excursion
+                         (beginning-of-line)
+                         (looking-at "#\\+\\(?:TITLE\\|title\\):")))
+              (org-link-store-props
+               :type "file"
+               :link (concat "file:" (buffer-file-name))
+               :description (cadar (org-collect-keywords '("TITLE")))))))
 #+end_src
 
 
@@ -2516,21 +2869,20 @@ A hook is add to toggle org-hide-leading-stars on toggling org-modern.
   :ensure t
   :after org
   :config
-  ;; Use custom symbols for heading stars
-  (setq org-modern-star '("" "" "" "" "" ""))
-
   ;; Hide the original asterisks
-  (setq org-modern-hide-stars nil)
+  
   (setq org-modern-star 'replace)
-  ;;(setq org-hide-leading-stars t) Already set in main org settings
-
+  (setq org-modern-hide-stars 'leading)
+  
+  ;(setq org-hide-leading-stars t)
   ;; Keep indentation reasonable
   (setq org-indent-indentation-per-level 2)
 
   ;; Disable other org-modern features
-  (setq org-modern-table nil)
+  (setq org-modern-table t)
   (setq org-modern-list nil)
-  (setq org-modern-block-name nil)
+  (setq org-modern-block-name t)
+  ;(setq org-modern-block-fringe 0)
   (setq org-modern-checkbox nil)
   (setq org-modern-priority nil)
   (setq org-modern-tag nil)
@@ -2539,9 +2891,9 @@ A hook is add to toggle org-hide-leading-stars on toggling org-modern.
   (setq org-modern-todo nil)
   (setq org-modern-horizontal-rule nil))
 
-(add-hook 'org-modern-mode-hook
-          (lambda ()
-            (setq org-hide-leading-stars org-modern-mode)))
+;; (add-hook 'org-modern-mode-hook
+;;           (lambda ()
+;;             (setq org-hide-leading-stars org-modern-mode)))
 (add-hook 'org-mode-hook #'org-modern-mode)
 #+end_src
 
@@ -2842,8 +3194,7 @@ currently matched in the minibuffer.
   ("C-," . consult-register-load)
   ("C-M-," . consult-register)
   (:map goto-map
-        ("l" . consult-line)
-        ("M-l" . consult-line)
+        ("l" . steven-follow-buffer-link)
         ("L" . consult-line-multi)
         ("i" . consult-imenu)
         ("o" . consult-outline)
@@ -2854,6 +3205,9 @@ currently matched in the minibuffer.
         ("h" . consult-org-heading))
   (:map search-map
         ("f" . consult-find)
+        ("l" . consult-line)
+        ("M-l" . consult-line)
+        ("L" . consult-line-multi)
         ("M-f" . consult-find)
         ("s" . consult-outline)
         ("M-s" . consult-outline)
@@ -2988,7 +3342,7 @@ embark.
   (consult-customize
    steven--consult-wrapper
    :state (consult--file-preview))
-  (setq consult-dir-default-command #'steven--consult-wrapper))
+  (setq consult-dir-default-command #'find-file))
   ;;(consult-customize
   ;;   consult-find
   ;;   :preview-key '(:debounce 0.4 any)))
@@ -3060,9 +3414,9 @@ The package is loaded directly from the git repo, which can be upgraded with /pa
     ;; `denote-infer-keywords' to be nil and `denote-known-keywords' to
 
     ;; have the keywords you need.
-    (setq denote-known-keywords '("emacs" "idea" "note" "recipe" "bikes" "config"))
+    (setq denote-known-keywords '("fragment" "journal" "poem" "fiction" "story"))
     (setq denote-infer-keywords t)
-    (setq denote-sort-keywords t)
+    (setq denote-sort-keywords nil)
     (setq denote-rename-confirmations nil)
     (setq denote-buffer-name-prefix "") ; to identify all Denote buffers
     (setq denote-rename-buffer-format "%D")
@@ -3430,7 +3784,7 @@ controlled by `delete-pair-blink-delay'."
 
 (bind-key "C-'" #'prot-pair-insert)
 (bind-key "M-'" #'prot-pair-insert-directly)
-(bind-key "M-\\" #'prot-pair-delete)
+;(bind-key "M-\\" #'prot-pair-delete)
 
 (provide 'prot-pair)
 ;;; prot-pair.el ends here
@@ -3479,8 +3833,8 @@ Configure the minibuffer and completions.
   :commands vertico-multiform-mode
   :after vertico
   :bind (:map vertico-map
-              ("C-l" . vertico-multiform-flat)
-              ("M-q" . vertico-multiform-unobtrusive)
+              ("M-q" . vertico-multiform-flat)
+              ("C-l" . vertico-multiform-unobtrusive)
               ("C-M-l" . embark-export))
   :init (vertico-multiform-mode 1)
   :config
@@ -3509,8 +3863,7 @@ Configure the minibuffer and completions.
            (org-refile reverse)
            (org-agenda-refile reverse)
            (org-capture-refile reverse)
-           (execute-extended-command unobtrusive)
-           (dired-goto-file flat)
+           (execute-extended-command flat)
            (consult-project-buffer flat)
            (consult-dir-maybe reverse)
            (consult-dir reverse)
@@ -3614,7 +3967,7 @@ I need to check how the :bind setup works, it might load the libraries not how I
         ("m" . center-line) ;c is taken by capatilize. m for middle
         ("d" . dictionary-search)
         ("w" . wiktionary-bro))
-        ;("e" . steven-gptel-lookup)) ;etmology search with gptel
+        ;("e" . steven-gptel-lookup)) ;set in gptel setup
   (:map embark-region-map
         ("m" . center-region) ; m for middle
         ("=" . quick-calc))
@@ -3727,7 +4080,7 @@ I need to check how the :bind setup works, it might load the libraries not how I
 
   (setf (alist-get ?  avy-dispatch-alist) 'avy-action-mark-to-char)
   :custom
-  (avy-timeout-seconds 0.6)       ; how long to wait for input in char-timer
+  (avy-timeout-seconds 0.4)       ; how long to wait for input in char-timer
   (avy-keys '(?a ?s ?d ?f ?g ?h ?j ?k ?l)) ; home row keys for jump labels
   (avy-style 'at-full)            ; show label over full target word
   (avy-background t))             ; dim background during selection
@@ -4037,7 +4390,7 @@ see what I like.
     (when frame
       (select-frame-set-input-focus frame))))
 
-(provide 'frame-extras.el)
+(provide 'frame-extras)
 ;;frame-extras ends here
 #+end_src
 
@@ -4112,8 +4465,8 @@ Otherwise rename to:
               (format "*shell %s*" dir-name))))
       (rename-buffer new-name t))))
 
-(add-hook 'shell-mode-hook #'steven--shell-rename-buffer)
-(add-hook 'eshell-mode-hook #'steven--shell-rename-buffer)
+;(add-hook 'shell-mode-hook #'steven--shell-rename-buffer)
+;(add-hook 'eshell-mode-hook #'steven--shell-rename-buffer)
 
 
 #+end_src
@@ -5272,6 +5625,89 @@ This needs to be tangled in its own file. See oantolin setup for more informatio
 ;  (let ((denote-directory (consult-dir--pick "In directory: ")))
 ;      (call-interactively #'denote)))
 
+(defun steven--collect-shr-links (seen)
+  "Return alist of (display . url) from shr-url text properties, updating SEEN."
+  (let (results)
+    (save-excursion
+      (goto-char (point-min))
+      (let (match)
+        (while (setq match (text-property-search-forward 'shr-url nil nil))
+          (let* ((url (prop-match-value match))
+                 (beg (prop-match-beginning match))
+                 (end (prop-match-end match))
+                 (text (string-trim (buffer-substring-no-properties beg end))))
+            (when (and url (not (string-empty-p url)) (not (gethash url seen)))
+              (puthash url t seen)
+              (push (cons (if (string-empty-p text) url text) url) results))))))
+    (nreverse results)))
+
+(defun steven--collect-denote-links (seen)
+  "Return alist of (display . denote:ID) from denote link regexps, updating SEEN."
+  (let (results
+        (regexps (when (featurep 'denote)
+                   (list denote-org-link-in-context-regexp
+                         denote-md-link-in-context-regexp
+                         denote-id-only-link-in-context-regexp))))
+    (dolist (regexp regexps)
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward regexp nil t)
+          (let* ((id (match-string-no-properties 1))
+                 (desc (or (match-string-no-properties 2) ""))
+                 (target (concat "denote:" id))
+                 (display (if (string-empty-p desc) target
+                            (format "%s  [denote]" desc))))
+            (unless (gethash target seen)
+              (puthash target t seen)
+              (push (cons display target) results))))))
+    (nreverse results)))
+
+(defun steven--collect-url-links (seen)
+  "Return alist of (url . url) for plain URLs in buffer, updating SEEN."
+  (let (results
+        (url-re (or (bound-and-true-p my/search-url-regexp) ffap-url-regexp)))
+    (when url-re
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward url-re nil t)
+          (let ((url (match-string-no-properties 0)))
+            (unless (or (gethash url seen)
+                        (get-text-property (match-beginning 0) 'shr-url))
+              (puthash url t seen)
+              (push (cons url url) results))))))
+    (nreverse results)))
+
+(defun steven--follow-link (target)
+  "Open TARGET, dispatching by link scheme."
+  (cond
+   ((string-prefix-p "denote:" target)
+    (if-let* ((id (substring target 7))
+              (file (denote-get-path-by-id id)))
+        (find-file file)
+      (user-error "No denote file for ID: %s" (substring target 7))))
+   ((string-prefix-p "file:" target)
+    (find-file (string-trim-left target "file:")))
+   ((string-prefix-p "info:" target)
+    (info target))
+   (t
+    (browse-url target))))
+
+;;;###autoload
+(defun steven-follow-buffer-link ()
+  "Complete-read all links in the current buffer and follow the selected one.
+Collects shr-url text properties (EWW, elfeed), denote: links, and plain URLs."
+  (interactive)
+  (let* ((seen (make-hash-table :test #'equal))
+         (candidates (append (steven--collect-shr-links seen)
+                             (steven--collect-denote-links seen)
+                             (steven--collect-url-links seen))))
+    (if (null candidates)
+        (user-error "No links found in buffer")
+      (let* ((selected (completing-read "Follow link: " candidates nil t))
+             (target (cdr (assoc selected candidates))))
+        (steven--follow-link target)))))
+
+
 (provide 'consult-extras)
 ;;; consult-extras.el ends here
 #+end_src
@@ -5691,14 +6127,9 @@ work of Prot. Some notes:
     (steven-icons-get-icon major-mode 'header-line-status)
   (steven-icons-get-icon major-mode 'header-line-status-inactive)))
 
-(defvar steven-headerline-dont-show-modes
-  '(dired-mode)
-  "List of major modes for which the headerline does not show the mode.")
-
 (defun steven-headerline-major-mode-name ()
   "Return the capitalized major mode name unless it's in `steven-headerline-dont-show-modes`."
-  (if (or (not (mode-line-window-selected-p))
-          (memq major-mode steven-headerline-dont-show-modes))
+  (if (not (mode-line-window-selected-p))
       ""
     (capitalize
      (string-remove-suffix
@@ -5743,6 +6174,16 @@ or nil."
     (propertize
      (format "%s%s" (or symbol " ") project-name))))
 
+(defun steven--headerline-git-short (&optional symbol)
+  "Git information, only a symbol when vc-mode non-nil"
+
+  (when vc-mode
+      (when-let* ((file (buffer-file-name))
+                  (branch (substring-no-properties vc-mode 5))
+                  (state (vc-state file)))
+
+        (propertize (format "%s" (or symbol " "))))))
+
 (defun steven--headerline-git-info (&optional symbol)
   "Git information as (branch, file status)"
 
@@ -5752,7 +6193,6 @@ or nil."
                   (state (vc-state file)))
 
         (propertize (format "%s%s, %s" (or symbol " ") branch state)))))
-       ; 'face  'header-line))))
 
 (defun steven-headerline-context ()
   "Return Denote silo OR Git project for the modeline"
@@ -5849,7 +6289,7 @@ or nil."
       (when (and (mode-line-window-selected-p)
                  (buffer-narrowed-p)
                  (not (derived-mode-p 'Info-mode 'help-mode 'special-mode 'message-mode)))
-        (propertize " Narrow " 'face 'steven-modeline-indicator-bg)))
+        (propertize " [N] " 'face 'steven-modeline-indicator-bg)))
 
 ;;;; Input method
 
@@ -5871,42 +6311,6 @@ or nil."
                     'face 'steven-modeline-indicator-bg
                     'mouse-face 'mode-line-highlight)))
 
-;;;; Terminal
-
-(defun nano-modeline-terminal-directory (&optional max-length)
-  "TERMINAL: Current working directory"
-
-  (let* ((max-length (or max-length 32))
-         (dir default-directory)
-         (path (reverse (split-string (abbreviate-file-name dir) "/")))
-         (output ""))
-    (when (and path (equal "" (car path)))
-      (setq path (cdr path)))
-    (while (and path (< (length output) (- max-length 0)))
-      (setq output (concat (car path) "/" output))
-      (setq path (cdr path)))
-    (when path
-      (setq output (concat "…/" output)))
-    (format "%s " output)))
-
-(defun nano-modeline-terminal-mode ()
-  "TERMINAL: mode"
-  (if-let* ((mode (cond ((derived-mode-p '(term-mode))
-                        (cond ((term-in-char-mode) "char")
-                              ((term-in-line-mode) "line")
-                              (t                   "????")))
-                       ((derived-mode-p '(eat-mode))
-                        (cond (eat--semi-char-mode "semi-char")
-                              (eat--char-mode "char")
-                              (eat--line-mode "line")
-                              (t               "????")))
-                       (t "????"))))
-      (format "(%s mode)" mode)
-    ""))
-
-(defun nano-modeline-terminal-shell ()
-  "TERMINAL: shell name"
-  (format "%s" shell-file-name))
 
 ;;;### autoload
 (defun nano-modeline-terminal (&optional where)
@@ -5947,24 +6351,6 @@ or nil."
 ;;; steven-headerline.el ends here
 #+end_src
 
-This is from nano emacs, not sure if I want to keep it:
-#+begin_src emacs-lisp
-(defun nano-modeline-update-windows ()
-  "Modify the mode line depending on the presence of a window
-below or a buffer local variable 'no-mode-line'."
-  (dolist (window (window-list))
-    (with-selected-window window
-	  (with-current-buffer (window-buffer window)
-        (if (or (not (boundp 'no-mode-line)) (not no-mode-line))
-            (set-window-parameter window 'mode-line-format
-                                  (cond ((not mode-line-format) 'none)
-                                        ((one-window-p t 'visible) (list ""))
-                                        ((eq (window-in-direction 'below) (minibuffer-window)) (list ""))
-                                        ((not (window-in-direction 'below)) (list ""))
-                                        (t 'none))))))))
-
-(add-hook 'window-configuration-change-hook 'nano-modeline-update-windows)
-#+end_src
 
 * Local variables
 

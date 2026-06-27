@@ -33,14 +33,9 @@
     (steven-icons-get-icon major-mode 'header-line-status)
   (steven-icons-get-icon major-mode 'header-line-status-inactive)))
 
-(defvar steven-headerline-dont-show-modes
-  '(dired-mode)
-  "List of major modes for which the headerline does not show the mode.")
-
 (defun steven-headerline-major-mode-name ()
   "Return the capitalized major mode name unless it's in `steven-headerline-dont-show-modes`."
-  (if (or (not (mode-line-window-selected-p))
-          (memq major-mode steven-headerline-dont-show-modes))
+  (if (not (mode-line-window-selected-p))
       ""
     (capitalize
      (string-remove-suffix
@@ -85,6 +80,16 @@ or nil."
     (propertize
      (format "%s%s" (or symbol " ") project-name))))
 
+(defun steven--headerline-git-short (&optional symbol)
+  "Git information, only a symbol when vc-mode non-nil"
+
+  (when vc-mode
+      (when-let* ((file (buffer-file-name))
+                  (branch (substring-no-properties vc-mode 5))
+                  (state (vc-state file)))
+
+        (propertize (format "%s" (or symbol " "))))))
+
 (defun steven--headerline-git-info (&optional symbol)
   "Git information as (branch, file status)"
 
@@ -94,7 +99,6 @@ or nil."
                   (state (vc-state file)))
 
         (propertize (format "%s%s, %s" (or symbol " ") branch state)))))
-       ; 'face  'header-line))))
 
 (defun steven-headerline-context ()
   "Return Denote silo OR Git project for the modeline"
@@ -191,7 +195,7 @@ or nil."
       (when (and (mode-line-window-selected-p)
                  (buffer-narrowed-p)
                  (not (derived-mode-p 'Info-mode 'help-mode 'special-mode 'message-mode)))
-        (propertize " Narrow " 'face 'steven-modeline-indicator-bg)))
+        (propertize " [N] " 'face 'steven-modeline-indicator-bg)))
 
 ;;;; Input method
 
@@ -213,42 +217,6 @@ or nil."
                     'face 'steven-modeline-indicator-bg
                     'mouse-face 'mode-line-highlight)))
 
-;;;; Terminal
-
-(defun nano-modeline-terminal-directory (&optional max-length)
-  "TERMINAL: Current working directory"
-
-  (let* ((max-length (or max-length 32))
-         (dir default-directory)
-         (path (reverse (split-string (abbreviate-file-name dir) "/")))
-         (output ""))
-    (when (and path (equal "" (car path)))
-      (setq path (cdr path)))
-    (while (and path (< (length output) (- max-length 0)))
-      (setq output (concat (car path) "/" output))
-      (setq path (cdr path)))
-    (when path
-      (setq output (concat "…/" output)))
-    (format "%s " output)))
-
-(defun nano-modeline-terminal-mode ()
-  "TERMINAL: mode"
-  (if-let* ((mode (cond ((derived-mode-p '(term-mode))
-                        (cond ((term-in-char-mode) "char")
-                              ((term-in-line-mode) "line")
-                              (t                   "????")))
-                       ((derived-mode-p '(eat-mode))
-                        (cond (eat--semi-char-mode "semi-char")
-                              (eat--char-mode "char")
-                              (eat--line-mode "line")
-                              (t               "????")))
-                       (t "????"))))
-      (format "(%s mode)" mode)
-    ""))
-
-(defun nano-modeline-terminal-shell ()
-  "TERMINAL: shell name"
-  (format "%s" shell-file-name))
 
 ;;;### autoload
 (defun nano-modeline-terminal (&optional where)

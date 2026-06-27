@@ -6,6 +6,9 @@
 (defun steven--modus-themes-custom-faces (&rest _)
   (modus-themes-with-colors
     (custom-set-faces
+     `(fringe ((t :inherit default)))
+     `(olivetti-fringe ((t :inherit fringe)))
+     `(region ((t :extend nil))) ; extend region bg only untill fill column width
      ;`(fringe ((t :background ,bg-main :foreground ,bg-main)))
      ;`(window-divider ((t :background ,bg-main :foreground ,bg-main)))
      ;`(window-divider-first-pixel ((t :background ,bg-main :foreground ,bg-main)))
@@ -15,6 +18,7 @@
 (defun steven--doric-themes-custom-faces (&rest _)
   (doric-themes-with-colors
     (custom-set-faces
+     `(olivetti-fringe ((t :inherit fringe)))
      `(region ((t :extend nil))) ; extend region bg only untill fill column width
      ;`(fringe ((t :background ,bg-main :foreground ,bg-main)))
      `(orderless-match-face-0 ((t :inherit bold :foreground ,fg-shadow-subtle)))

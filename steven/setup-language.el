@@ -11,7 +11,7 @@
     ('english
      ;; Spell checking
      (setq jinx-languages "en_GB")
-     (when (bound-and-true-p jinx-mode) (jinx-reload))
+     (when (bound-and-true-p jinx-mode) (jinx-mode -1) (jinx-mode 1))
      (setq wiktionary-bro-language "en")
      (setq whisper-language "en")
      (message "Language set to English"))
@@ -19,7 +19,7 @@
     ('dutch
      ;; Spell checking
      (setq jinx-languages "nl_NL")
-     (when (bound-and-true-p jinx-mode) (jinx-reload))
+     (when (bound-and-true-p jinx-mode) (jinx-mode -1) (jinx-mode 1))
      (setq wiktionary-bro-language "nl")
      (setq whisper-language "nl")
      (message "Language set to Dutch"))))

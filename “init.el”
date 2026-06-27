@@ -1,0 +1,3 @@
+(use-package socratic-extras
+  :bind ((“C-c a q” . steven-socratic-current-note)
+         (“C-c a Q” . steven-socratic-region)))
