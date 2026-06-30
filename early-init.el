@@ -58,34 +58,35 @@
   "When non-nil, this is a build --with-pgtk.
 PGTK is the Wayland-specific build of Emacs.")
 
-(setq initial-frame-alist `((horizontal-scroll-bars . nil)
-                            (menu-bar-lines . 0)
-                            (tool-bar-lines . 0)
-                            (vertical-scroll-bars . nil)
-                            (scroll-bar-width . ,(if steven-pgtk-p 12 6))
-                            (width . (text-pixels . 800))
-                            (height . (text-pixels . 950))
-                            ;,@(when steven-pgtk-p
-                            ;    (list  '(undecorated . t)))
-                            ,@(when steven-laptop-p
-                                (list '(undecorated . t)))))
+(setq initial-frame-alist
+      `((horizontal-scroll-bars . nil)
+        (menu-bar-lines . 0)
+        (tool-bar-lines . 0)
+        (vertical-scroll-bars . nil)
+        (scroll-bar-width . ,(if steven-pgtk-p 12 6))
+        (fullscreen . maximized)
+        ,@(when steven-laptop-p
+            (list '(undecorated . t)))))
+
+(setq default-frame-alist initial-frame-alist)
 
 ;; Do it again after init so that any intermediate changes are not retained.
 ;; Note that we cannot rely on setting this to `initial-frame-alist' as that may change in the meantime.
 ;; We explicitly set the value to be certain of the outcome.
 ;; This does not inhibit other programs from modifying the list, though I would consider it undesirable if they were touching these specific settings.
-(add-hook 'after-init-hook (lambda ()
-        (setq default-frame-alist `((horizontal-scroll-bars . nil)
-                                 (menu-bar-lines . 0)
-                                 (tool-bar-lines . 0)
-                                 (vertical-scroll-bars . nil)
-                                 (scroll-bar-width . ,(if steven-pgtk-p 12 6))
-                                 (width . (text-pixels . 800))
-                                 (height . (text-pixels . 950))
-                                 ;,@(when steven-pgtk-p
-                                 ;    (list '(undecorated . t)))
-                                 ,@(when steven-laptop-p
-                                     (list '(undecorated . t)))))))
+(add-hook 'after-init-hook
+          (lambda ()
+            (setq default-frame-alist
+                  `((horizontal-scroll-bars . nil)
+                    (menu-bar-lines . 0)
+                    (tool-bar-lines . 0)
+                    (vertical-scroll-bars . nil)
+                    (scroll-bar-width . ,(if steven-pgtk-p 12 6))
+                    ;; (width . (text-pixels . 800))
+                    ;; (height . (text-pixels . 950))
+                    (fullscreen . maximized)
+                    ,@(when steven-laptop-p
+                        (list '(undecorated . t)))))))
 
 (defun steven-emacs-no-minibuffer-scroll-bar (frame)
   "Remove the minibuffer scroll bars from FRAME."

@@ -103,5 +103,34 @@
 ;;              (embark-indicators '(embark-minimal-indicator)))
 ;;         (embark-act arg)))
 
+;;;###autoload
+(defun steven-embark-target-image-file ()
+  "Return an `image-file' target for the image at point.
+Works in dired (file under cursor) and org-mode ([[file:...]] links)."
+  (let (path)
+    (cond
+     ((derived-mode-p 'dired-mode)
+      (setq path (ignore-errors (dired-get-filename nil t))))
+     ((derived-mode-p 'org-mode)
+      (when-let* ((el (org-element-context))
+                  (_ (eq (org-element-type el) 'link))
+                  (_ (equal (org-element-property :type el) "file"))
+                  (raw (org-element-property :path el)))
+        (setq path (expand-file-name
+                    raw
+                    (and buffer-file-name (file-name-directory buffer-file-name)))))))
+    (when (and path (steven-image--image-p path))
+      (cons 'image-file path))))
+
+(defvar steven-embark-image-file-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "i") #'steven-image-info)
+    (define-key map (kbd "j") #'steven-image-convert-to-jpg)
+    (define-key map (kbd "p") #'steven-image-convert-to-png)
+    (define-key map (kbd "r") #'steven-image-resize)
+    (define-key map (kbd "o") #'embark-open-externally)
+    map)
+  "Embark keymap for image files.")
+
 (provide 'embark-extras)
 ;;embark-extras.el ends here

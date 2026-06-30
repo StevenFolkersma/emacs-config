@@ -100,34 +100,35 @@ make full screen or add ctself.
   "When non-nil, this is a build --with-pgtk.
 PGTK is the Wayland-specific build of Emacs.")
 
-(setq initial-frame-alist `((horizontal-scroll-bars . nil)
-                            (menu-bar-lines . 0)
-                            (tool-bar-lines . 0)
-                            (vertical-scroll-bars . nil)
-                            (scroll-bar-width . ,(if steven-pgtk-p 12 6))
-                            (width . (text-pixels . 800))
-                            (height . (text-pixels . 950))
-                            ;,@(when steven-pgtk-p
-                            ;    (list  '(undecorated . t)))
-                            ,@(when steven-laptop-p
-                                (list '(undecorated . t)))))
+(setq initial-frame-alist
+      `((horizontal-scroll-bars . nil)
+        (menu-bar-lines . 0)
+        (tool-bar-lines . 0)
+        (vertical-scroll-bars . nil)
+        (scroll-bar-width . ,(if steven-pgtk-p 12 6))
+        (fullscreen . maximized)
+        ,@(when steven-laptop-p
+            (list '(undecorated . t)))))
+
+(setq default-frame-alist initial-frame-alist)
 
 ;; Do it again after init so that any intermediate changes are not retained.
 ;; Note that we cannot rely on setting this to `initial-frame-alist' as that may change in the meantime.
 ;; We explicitly set the value to be certain of the outcome.
 ;; This does not inhibit other programs from modifying the list, though I would consider it undesirable if they were touching these specific settings.
-(add-hook 'after-init-hook (lambda ()
-        (setq default-frame-alist `((horizontal-scroll-bars . nil)
-                                 (menu-bar-lines . 0)
-                                 (tool-bar-lines . 0)
-                                 (vertical-scroll-bars . nil)
-                                 (scroll-bar-width . ,(if steven-pgtk-p 12 6))
-                                 (width . (text-pixels . 800))
-                                 (height . (text-pixels . 950))
-                                 ;,@(when steven-pgtk-p
-                                 ;    (list '(undecorated . t)))
-                                 ,@(when steven-laptop-p
-                                     (list '(undecorated . t)))))))
+(add-hook 'after-init-hook
+          (lambda ()
+            (setq default-frame-alist
+                  `((horizontal-scroll-bars . nil)
+                    (menu-bar-lines . 0)
+                    (tool-bar-lines . 0)
+                    (vertical-scroll-bars . nil)
+                    (scroll-bar-width . ,(if steven-pgtk-p 12 6))
+                    ;; (width . (text-pixels . 800))
+                    ;; (height . (text-pixels . 950))
+                    (fullscreen . maximized)
+                    ,@(when steven-laptop-p
+                        (list '(undecorated . t)))))))
 
 (defun steven-emacs-no-minibuffer-scroll-bar (frame)
   "Remove the minibuffer scroll bars from FRAME."
@@ -157,6 +158,8 @@ With regard to the settings here, make sure to read my article about package arc
 
 #+begin_src emacs-lisp :tangle "init.el"
 ;;; -*- lexical-binding: t -*-
+(setq max-lisp-eval-depth 3000)
+
 (setq package-archives
       '(("gnu-elpa" . "https://elpa.gnu.org/packages/")
         ("nongnu" . "https://elpa.nongnu.org/nongnu/")
@@ -296,7 +299,7 @@ indent-tabs-mode, if non-nil, indentation can insert tabs.
 ;;             "/usr/local/bin/emacsclient")))
 #+end_src
 
-** The =setup-basics.el= with simple conevenience commands
+** The =setup-basics.el= with simple convenience commands
 
 Quality of life snipper from Prot's setup.
 #+begin_src emacs-lisp :tangle "steven/setup-basic.el"
@@ -620,7 +623,7 @@ Trying out Fontaine package by Prot
             :mode-line-active-height 1.0
             :mode-line-inactive-height 1.0
             :variable-pitch-family "EB Garamond"
-            :variable-pitch-height 1.5)
+            :variable-pitch-height 1.3)
            (small-aporetic
             :inherit medium-aporetic
             :default-height 135)
@@ -1327,6 +1330,16 @@ to add a context indication in the modeline. I can replace this
   (put 'auto-fill-mode 'safe-local-variable #'booleanp))
 
 
+#+end_src
+
+** The =init.el= section for setting up project.el
+
+#+begin_src emacs-lisp :tangle "init.el"
+(with-eval-after-load 'project
+  (defun steven/project-ignore-package-dirs (orig-fn dir)
+    (unless (string-match-p (rx (or "/elpa/" "/.local/")) dir)
+      (funcall orig-fn dir)))
+  (advice-add 'project-try-vc :around #'steven/project-ignore-package-dirs))
 #+end_src
 
 ** The =setup-frame.el= adding a function to toggle frame width
@@ -2042,6 +2055,18 @@ Dired subtree is to show subtrees of folder with TAB
    :focus-now t
    :no-progress t))
 
+(defun dwim-shell-ocr-image-and-open ()
+  (interactive)
+  (dwim-shell-command-on-marked-files
+   "OCR image"
+   "tesseract '<<f>>' '<<fne>>' -l nld+eng && echo '<<fne>>.txt'"
+   :utils "tesseract"
+   :on-completion (lambda (buffer _process)
+                    (with-current-buffer buffer
+                      (goto-char (point-max))
+                      (when (re-search-backward "^\\(.+\\.txt\\)$" nil t)
+                        (find-file (match-string 1)))))))
+
 (defun dwim-shell-commands-markdown-to-org ()
   "Convert Markdown file(s) to Org."
   (interactive)
@@ -2314,6 +2339,23 @@ Keeps aspect ratio and never upscales. Appends _<max-px> to the filename."
    (format "Resize to %dpx" max-px)
    (format "convert <<f>> -resize '%dx%d>' <<fne>>_%d.<<e>>" max-px max-px max-px)
    :utils "convert"))
+
+;;;###autoload
+(defun steven-image--image-p (path)
+  "Return t if PATH has an image file extension."
+  (and (stringp path)
+       (string-match-p "\\.\\(png\\|jpg\\|jpeg\\|gif\\|webp\\|svg\\|bmp\\|tiff?\\)\\'"
+                       (downcase path))))
+
+;;;###autoload
+(defun steven-image-info (file)
+  "Display dimensions and file size of image FILE."
+  (interactive "fImage: ")
+  (let ((out (string-trim
+              (shell-command-to-string
+               (format "identify -format '%%wx%%h, %%b' %s"
+                       (shell-quote-argument (expand-file-name file)))))))
+    (message "%s — %s" (file-name-nondirectory file) out)))
 
 (provide 'image-extras)
 ;;; image-extras.el ends here
@@ -3274,8 +3316,27 @@ currently matched in the minibuffer.
 ;     (mapcar (lambda (r) (consult--convert-regexp r type)) input)
 ;     (lambda (str) (orderless--highlight input t str)))))
 
-(use-package consult-extras
-  )
+(use-package consult-extras)
+#+end_src
+
+#+begin_src emacs-lisp
+(use-package consult-omni
+  :vc (:url "https://github.com/armindarvish/consult-omni" :rev :newest)
+  :after consult
+  :bind (:map search-map
+         ("w" . consult-omni-multi)
+         ("W" . consult-omni-wikipedia))
+  :config
+  (add-to-list 'load-path
+               (expand-file-name "sources"
+                                 (file-name-directory (locate-library "consult-omni"))))
+  (require 'consult-omni-wikipedia)
+  (require 'consult-omni-brave)
+  (setq consult-omni-multi-sources '("Wikipedia" "Brave"))
+  (setq consult-omni-brave-api-key
+        (lambda ()
+          (auth-source-pick-first-password :host "api.search.brave.com" :user "apikey")))
+  (setq consult-omni-show-preview t))
 #+end_src
 
 ** The =init.el= section on custom consult functions (OLD)
@@ -3863,7 +3924,7 @@ Configure the minibuffer and completions.
            (org-refile reverse)
            (org-agenda-refile reverse)
            (org-capture-refile reverse)
-           (execute-extended-command flat)
+           (execute-extended-command reverse)
            (consult-project-buffer flat)
            (consult-dir-maybe reverse)
            (consult-dir reverse)
@@ -4041,8 +4102,10 @@ I need to check how the :bind setup works, it might load the libraries not how I
   :after (embark consult embark-consult)
   :config
   (add-to-list 'embark-target-finders #'embark-target-this-buffer-file 'append)
+  (add-to-list 'embark-target-finders #'steven-embark-target-image-file 'append)
   (add-to-list 'embark-keymap-alist '(this-buffer-file . this-buffer-file-map))
   (add-to-list 'embark-keymap-alist '(consult-location . embark-consult-location-map))
+  (add-to-list 'embark-keymap-alist '(image-file . steven-embark-image-file-map))
   (unless (member 'embark-target-this-buffer-file embark-target-finders)
        (setq embark-target-finders
              (append (butlast embark-target-finders 2)
@@ -4144,7 +4207,7 @@ If you customize 'shr-fill-text' to nil, EWW will now automatically turn on 'vis
   :config
   (setq shr-use-colors nil)             ; t is bad for accessibility
   (setq shr-use-font nil)             
-  (setq shr-max-image-proportion 0.6)
+  (setq shr-max-image-proportion 0.7)
   (setq shr-width 80)
   (setq shr-max-width 80)
   (setq shr-discard-aria-hidden t)
@@ -4158,7 +4221,8 @@ If you customize 'shr-fill-text' to nil, EWW will now automatically turn on 'vis
 (use-package olivetti
   :ensure t
   :commands (olivetti-mode)
-  :hook (org-mode . olivetti-mode)
+  :hook ((org-mode . olivetti-mode)
+       (elfeed-show-mode . olivetti-mode))
   :config
   (setq-default olivetti-body-width 0.65)
   (setq olivetti-minimum-body-width 80)
@@ -4288,8 +4352,9 @@ My elfeed feeds list is placed in: [[file:elfeed-feeds.el][elfeed-feeds.el]]
   :bind
   ("C-c e" . elfeed)
   :config
-  (load-file "~/.config/emacs/elfeed-feeds.el"))
-  ;(require 'steven-elfeed-nano))
+  (load-file "~/.config/emacs/elfeed-feeds.el")
+  (setq elfeed-search-filter "@12-hours-ago +unread +news")
+  (require 'steven-elfeed-extras))
 #+END_SRC  
 
 This is a function to style the search mode (based on [[https://github.com/rougier/nano-elfeed/blob/master/nano-elfeed.el][link]])
@@ -5104,7 +5169,7 @@ Without a region, falls back to the word at point."
           (read-string "Define: ")))))
   (let ((trimmed (string-trim text)))
     (when (string-empty-p trimmed) (user-error "Nothing to define"))
-    (message "Defining "%s"…"
+    (message "Defining %s…"
              (truncate-string-to-width trimmed 50 nil nil "…"))
     (gptel-request
      trimmed
@@ -5489,6 +5554,7 @@ This needs to be tangled in its own file. See oantolin setup for more informatio
 
 (defvar embark-consult-location-map
   (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map embark-general-map)
     (define-key map (kbd "l") #'steven-org-link-heading-here)
     map)
   "Keymap for consult-location actions.") 
@@ -5589,6 +5655,35 @@ This needs to be tangled in its own file. See oantolin setup for more informatio
 ;;       (let* ((embark-prompter 'embark-completing-read-prompter)
 ;;              (embark-indicators '(embark-minimal-indicator)))
 ;;         (embark-act arg)))
+
+;;;###autoload
+(defun steven-embark-target-image-file ()
+  "Return an `image-file' target for the image at point.
+Works in dired (file under cursor) and org-mode ([[file:...]] links)."
+  (let (path)
+    (cond
+     ((derived-mode-p 'dired-mode)
+      (setq path (ignore-errors (dired-get-filename nil t))))
+     ((derived-mode-p 'org-mode)
+      (when-let* ((el (org-element-context))
+                  (_ (eq (org-element-type el) 'link))
+                  (_ (equal (org-element-property :type el) "file"))
+                  (raw (org-element-property :path el)))
+        (setq path (expand-file-name
+                    raw
+                    (and buffer-file-name (file-name-directory buffer-file-name)))))))
+    (when (and path (steven-image--image-p path))
+      (cons 'image-file path))))
+
+(defvar steven-embark-image-file-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "i") #'steven-image-info)
+    (define-key map (kbd "j") #'steven-image-convert-to-jpg)
+    (define-key map (kbd "p") #'steven-image-convert-to-png)
+    (define-key map (kbd "r") #'steven-image-resize)
+    (define-key map (kbd "o") #'embark-open-externally)
+    map)
+  "Embark keymap for image files.")
 
 (provide 'embark-extras)
 ;;embark-extras.el ends here
@@ -5864,9 +5959,9 @@ TARGET can be a file, directory, or bookmark."
 ;;; denote-embark.el ends here
 #+end_src
 
-** The =steven-elfeed-nano.el= section with custom elfeed module
+** The =steven-elfeed-extras.el= section with custom elfeed module
 
-#+begin_src emacs-lisp :tangle "steven/steven-elfeed-nano.el"
+#+begin_src emacs-lisp :tangle "steven/steven-elfeed-extras.el"
 ;;; -*- lexical-binding: t -*-
 (require 'elfeed)
 
@@ -5969,31 +6064,19 @@ TARGET can be a file, directory, or bookmark."
       (nano-elfeed-prev-entry)
       (call-interactively #'elfeed-search-show-entry)))
 
-(setq elfeed-search-filter "@12-hours-ago +unread +news"          
-        elfeed-search-print-entry-function
-             #'nano-elfeed-search-print-entry)
+;; (setq elfeed-search-filter "@12-hours-ago +unread +news"          
+;;         elfeed-search-print-entry-function
+;;              #'nano-elfeed-search-print-entry)
 
-(bind-key "<down>" #'nano-elfeed-next-entry 'elfeed-search-mode-map)
-(bind-key "n" #'nano-elfeed-next-entry 'elfeed-search-mode-map)
+;; (bind-key "<down>" #'nano-elfeed-next-entry 'elfeed-search-mode-map)
+;; (bind-key "n" #'nano-elfeed-next-entry 'elfeed-search-mode-map)
 
-(bind-key "<up>" #'nano-elfeed-prev-entry 'elfeed-search-mode-map)
-(bind-key "p" #'nano-elfeed-prev-entry 'elfeed-search-mode-map)
+;; (bind-key "<up>" #'nano-elfeed-prev-entry 'elfeed-search-mode-map)
+;; (bind-key "p" #'nano-elfeed-prev-entry 'elfeed-search-mode-map)
 
-(bind-key "p" #'elfeed-show-prev 'elfeed-show-mode-map)
-(bind-key "n" #'nano-elfeed-show-next 'elfeed-show-mode-map)
+;; (bind-key "p" #'elfeed-show-prev 'elfeed-show-mode-map)
+;; (bind-key "n" #'nano-elfeed-show-next 'elfeed-show-mode-map)
 
-
-  ;(add-hook 'elfeed-search-mode-hook #'nano-elfeed-search-mode) (add-hook 'elfeed-show-mode-hook #'nano-elfeed-show-mode)
-
-#+end_src
-
-This is a function to open some feeds in eww readable mode, I found that for
-example with the Guardian and NRC this works quite well. *Not implemented yet*.
-This now only works from the 'search' mode in elfeed, not during 'show' mode.
-Not sure what is better. *Note:* define-key causes and error during init since
-when this is run 'elfeed-search-mode-map' is not yet available!
-#+begin_src emacs-lisp :tangle "steven/steven-elfeed-nano.el"
-;;;###autoload
 (defun steven-elfeed-eww-readable ()
    "Open current elfeed entry in eww with readable mode."
    (interactive)
@@ -6001,11 +6084,12 @@ when this is run 'elfeed-search-mode-map' is not yet available!
      (eww link)
      (add-hook 'eww-after-render-hook #'eww-readable nil t)))
 
-;; (define-key elfeed-search-mode-map (kbd "e") 'steven/elfeed-eww-readable)
-#+end_src
+;; This is a function to open some feeds in eww readable mode, I found that for
+;; example with the Guardian and NRC this works quite well. *Not implemented yet*.
+;; This now only works from the 'search' mode in elfeed, not during 'show' mode.
+;; Not sure what is better. *Note:* define-key causes and error during init since
+;; when this is run 'elfeed-search-mode-map' is not yet available!
 
-Play youtube videos with mpv (CLI tool)
-#+begin_src emacs-lisp :tangle "steven/steven-elfeed-nano.el"
 ;;;###autoload
 (defun steven-elfeed-play-with-mpv ()
      "Play entry link with mpv."
@@ -6015,10 +6099,145 @@ Play youtube videos with mpv (CLI tool)
              (message "Opening %s with mpv..." (elfeed-entry-link entry))
              (start-process "elfeed-mpv" nil "mpv" (elfeed-entry-link entry)))))
 
-;; (define-key elfeed-search-mode-map (kbd "v") 'steven/elfeed-play-with-mpv) (define-key elfeed-show-mode-map (kbd "v") 'steven/elfeed-play-with-mpv)
+(define-key elfeed-search-mode-map (kbd "v") 'steven/elfeed-play-with-mpv) 
+(define-key elfeed-show-mode-map (kbd "v") 'steven/elfeed-play-with-mpv)
 
-(provide 'steven-elfeed-nano)
-;;; steven-elfeed-nano.el ends here
+;; search by day functions from Karthinks
+(defun my/elfeed-search-by-day (dir)
+    (lambda (&optional arg)
+      (interactive "p")
+      (let* ((entry (elfeed-search-selected :ignore-region))
+             (this-day (or (and (string-match-p ".*@\\(.+\\)--.*" elfeed-search-filter)
+                                (time-to-seconds
+                                 (encode-time 
+                                  (parse-time-string
+                                   (concat (replace-regexp-in-string
+                                            ".*@\\([^[:space:]]+?\\)--.*" "\\1"
+                                            elfeed-search-filter)
+                                           " 00:00:00 Z")))))
+                           (and entry
+                                (elfeed-entry-date entry))
+                           (time-to-seconds
+                            (current-time))))
+             (next-day (time-add this-day (days-to-time (or arg 1))))
+             (next-next-day (time-add next-day (days-to-time (or arg 1))))
+             (next-next-next-day (time-add next-next-day (days-to-time (or arg 1))))
+             (prev-day (time-subtract this-day (days-to-time (or arg 1))))
+             from to)
+        (pcase dir
+          ('next (setq from next-next-day
+                       to   next-next-next-day))
+          ('prev (setq from this-day
+                       to   next-day))
+          (_     (setq from next-day
+                       to   next-next-day)))
+        (let ((elfeed-search-date-format '("%Y-%m-%d" 10 :left)))
+          (setq elfeed-search-filter (concat (replace-regexp-in-string
+                                              " @[^[:space:]]*" ""
+                                              elfeed-search-filter)
+                                             " @"  (elfeed-search-format-date from)
+                                             "--" (elfeed-search-format-date to))))
+        (elfeed-search-update :force))))
+  
+(defun my/elfeed-random-date ()
+    (interactive)
+    (let* ((from
+            (time-to-seconds
+             (encode-time 
+              (parse-time-string
+               (format "%d-%02d-%02d 00:00:00 Z"
+                       (+ 2012 (cl-random 10))
+                       (1+ (cl-random 11))
+                       (1+ (cl-random 30)))))))
+           (to (time-add from (days-to-time 5)))
+           (date-string
+            (concat " @" (elfeed-search-format-date from)
+                    "--" (elfeed-search-format-date to))))
+      (setq elfeed-search-filter
+            (concat (replace-regexp-in-string
+                     " @[^[:space:]]*" ""
+                     elfeed-search-filter)
+                    date-string)))
+    (elfeed-search-update :force))
+  
+  (define-key elfeed-search-mode-map (kbd ".") (my/elfeed-search-by-day 'this))
+  (define-key elfeed-search-mode-map (kbd "b") (my/elfeed-search-by-day 'next))
+  (define-key elfeed-search-mode-map (kbd "f") (my/elfeed-search-by-day 'prev))
+  (define-key elfeed-search-mode-map (kbd "`") 'my/elfeed-random-date)
+
+;; setup of more minimal elfeed-show-mode
+(defvar steven-elfeed-enclosure-max-height 300
+  "Maximum pixel height for inline enclosure images in elfeed-show.")
+
+(defun steven--elfeed-image-url-p (url enc-type)
+  "Return non-nil if ENC-TYPE or URL extension indicates an image."
+  (or (and enc-type (string-prefix-p "image/" enc-type))
+      (string-match-p "\\.\\(jpe?g\\|png\\|gif\\|webp\\|svg\\|avif\\)\\(?:[?#].*\\)?\\'"
+                      (downcase url))))
+
+(defun steven--elfeed-insert-image (url)
+  "Fetch URL synchronously and insert image capped at `steven-elfeed-enclosure-max-height'.
+Falls back to a clickable link on fetch or decode failure."
+  (let* ((buf (ignore-errors (url-retrieve-synchronously url t t 5)))
+         (image (when (and buf (buffer-live-p buf))
+                  (unwind-protect
+                      (with-current-buffer buf
+                        ;; url-http-end-of-headers is a buffer-local set by url.el;
+                        ;; it points to the last header byte, so body starts at +1.
+                        (let ((body-start (when (bound-and-true-p url-http-end-of-headers)
+                                            (1+ url-http-end-of-headers))))
+                          (when body-start
+                            (ignore-errors
+                              (create-image
+                               (buffer-substring-no-properties body-start (point-max))
+                               nil t
+                               :max-height steven-elfeed-enclosure-max-height)))))
+                    (kill-buffer buf)))))
+    (if image
+        (insert-image image url)
+      (elfeed-insert-link url))))
+
+(defun steven-elfeed-show-refresh ()
+  "Display the current elfeed entry with a minimal header (Title, Date, Feed only).
+Enclosures are rendered inline if they are images, otherwise shown as clickable links."
+  (interactive)
+  (let* ((inhibit-read-only t)
+         (title      (elfeed-entry-title elfeed-show-entry))
+         (date       (seconds-to-time (elfeed-entry-date elfeed-show-entry)))
+         (nicedate   (format-time-string "%a, %e %b %Y %T %Z" date))
+         (content    (elfeed-deref (elfeed-entry-content elfeed-show-entry)))
+         (type       (elfeed-entry-content-type elfeed-show-entry))
+         (feed       (elfeed-entry-feed elfeed-show-entry))
+         (feed-title (elfeed-feed-title feed))
+         (base       (and feed (elfeed-compute-base (elfeed-feed-url feed))))
+         (enclosures (elfeed-entry-enclosures elfeed-show-entry)))
+    (erase-buffer)
+    (insert (format (propertize "Title: %s\n" 'face 'message-header-name)
+                    (propertize title 'face 'message-header-subject)))
+    (insert (format (propertize "Date: %s\n" 'face 'message-header-name)
+                    (propertize nicedate 'face 'message-header-other)))
+    (insert (format (propertize "Feed: %s\n" 'face 'message-header-name)
+                    (propertize feed-title 'face 'message-header-other)))
+    (insert "\n")
+    (cl-loop for enclosure in enclosures
+             do (let ((enc-url  (car enclosure))
+                      (enc-type (cadr enclosure)))
+                  (if (steven--elfeed-image-url-p enc-url enc-type)
+                      (steven--elfeed-insert-image enc-url)
+                    (elfeed-insert-link enc-url))
+                  (insert "\n")))
+    (when enclosures (insert "\n"))
+    (if content
+        (if (eq type 'html)
+            (elfeed-insert-html content base)
+          (insert content))
+      (insert (propertize "(empty)\n" 'face 'italic)))
+    (goto-char (point-min))))
+
+(setq elfeed-show-refresh-function #'steven-elfeed-show-refresh)
+
+(provide 'steven-elfeed-extras)
+;;; steven-elfeed-extras.el ends here
 #+end_src
 
 ** The =steven-icons.el= section of steven-icons.el

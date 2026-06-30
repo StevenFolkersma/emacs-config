@@ -1,4 +1,6 @@
 ;;; -*- lexical-binding: t -*-
+(setq max-lisp-eval-depth 3000)
+
 (setq package-archives
       '(("gnu-elpa" . "https://elpa.gnu.org/packages/")
         ("nongnu" . "https://elpa.nongnu.org/nongnu/")
@@ -152,7 +154,7 @@
             :mode-line-active-height 1.0
             :mode-line-inactive-height 1.0
             :variable-pitch-family "EB Garamond"
-            :variable-pitch-height 1.5)
+            :variable-pitch-height 1.3)
            (small-aporetic
             :inherit medium-aporetic
             :default-height 135)
@@ -398,6 +400,12 @@
   (put 'steven--context-var 'safe-local-variable #'stringp)
   (put 'visual-line-mode 'safe-local-variable #'booleanp)
   (put 'auto-fill-mode 'safe-local-variable #'booleanp))
+
+(with-eval-after-load 'project
+  (defun steven/project-ignore-package-dirs (orig-fn dir)
+    (unless (string-match-p (rx (or "/elpa/" "/.local/")) dir)
+      (funcall orig-fn dir)))
+  (advice-add 'project-try-vc :around #'steven/project-ignore-package-dirs))
 
 ;;loading the .el file
 (use-package setup-frame)
@@ -813,6 +821,18 @@ Also see `my/search-occur-url'."
    :utils "python3"
    :focus-now t
    :no-progress t))
+
+(defun dwim-shell-ocr-image-and-open ()
+  (interactive)
+  (dwim-shell-command-on-marked-files
+   "OCR image"
+   "tesseract '<<f>>' '<<fne>>' -l nld+eng && echo '<<fne>>.txt'"
+   :utils "tesseract"
+   :on-completion (lambda (buffer _process)
+                    (with-current-buffer buffer
+                      (goto-char (point-max))
+                      (when (re-search-backward "^\\(.+\\.txt\\)$" nil t)
+                        (find-file (match-string 1)))))))
 
 (defun dwim-shell-commands-markdown-to-org ()
   "Convert Markdown file(s) to Org."
@@ -1271,8 +1291,7 @@ if `org-store-link' is called from the #+TITLE line."
 ;     (mapcar (lambda (r) (consult--convert-regexp r type)) input)
 ;     (lambda (str) (orderless--highlight input t str)))))
 
-(use-package consult-extras
-  )
+(use-package consult-extras)
 
 (use-package consult-notes
   :ensure t
@@ -1543,7 +1562,7 @@ if `org-store-link' is called from the #+TITLE line."
            (org-refile reverse)
            (org-agenda-refile reverse)
            (org-capture-refile reverse)
-           (execute-extended-command flat)
+           (execute-extended-command reverse)
            (consult-project-buffer flat)
            (consult-dir-maybe reverse)
            (consult-dir reverse)
@@ -1695,8 +1714,10 @@ if `org-store-link' is called from the #+TITLE line."
   :after (embark consult embark-consult)
   :config
   (add-to-list 'embark-target-finders #'embark-target-this-buffer-file 'append)
+  (add-to-list 'embark-target-finders #'steven-embark-target-image-file 'append)
   (add-to-list 'embark-keymap-alist '(this-buffer-file . this-buffer-file-map))
   (add-to-list 'embark-keymap-alist '(consult-location . embark-consult-location-map))
+  (add-to-list 'embark-keymap-alist '(image-file . steven-embark-image-file-map))
   (unless (member 'embark-target-this-buffer-file embark-target-finders)
        (setq embark-target-finders
              (append (butlast embark-target-finders 2)
@@ -1751,7 +1772,7 @@ if `org-store-link' is called from the #+TITLE line."
   :config
   (setq shr-use-colors nil)             ; t is bad for accessibility
   (setq shr-use-font nil)             
-  (setq shr-max-image-proportion 0.6)
+  (setq shr-max-image-proportion 0.7)
   (setq shr-width 80)
   (setq shr-max-width 80)
   (setq shr-discard-aria-hidden t)
@@ -1761,7 +1782,8 @@ if `org-store-link' is called from the #+TITLE line."
 (use-package olivetti
   :ensure t
   :commands (olivetti-mode)
-  :hook (org-mode . olivetti-mode)
+  :hook ((org-mode . olivetti-mode)
+       (elfeed-show-mode . olivetti-mode))
   :config
   (setq-default olivetti-body-width 0.65)
   (setq olivetti-minimum-body-width 80)
@@ -1876,8 +1898,9 @@ if `org-store-link' is called from the #+TITLE line."
   :bind
   ("C-c e" . elfeed)
   :config
-  (load-file "~/.config/emacs/elfeed-feeds.el"))
-  ;(require 'steven-elfeed-nano))
+  (load-file "~/.config/emacs/elfeed-feeds.el")
+  (setq elfeed-search-filter "@12-hours-ago +unread +news")
+  (require 'steven-elfeed-extras))
 
 (use-package which-key
   :ensure nil ; built into Emacs 30

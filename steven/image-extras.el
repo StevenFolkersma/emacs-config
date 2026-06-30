@@ -252,5 +252,22 @@ Keeps aspect ratio and never upscales. Appends _<max-px> to the filename."
    (format "convert <<f>> -resize '%dx%d>' <<fne>>_%d.<<e>>" max-px max-px max-px)
    :utils "convert"))
 
+;;;###autoload
+(defun steven-image--image-p (path)
+  "Return t if PATH has an image file extension."
+  (and (stringp path)
+       (string-match-p "\\.\\(png\\|jpg\\|jpeg\\|gif\\|webp\\|svg\\|bmp\\|tiff?\\)\\'"
+                       (downcase path))))
+
+;;;###autoload
+(defun steven-image-info (file)
+  "Display dimensions and file size of image FILE."
+  (interactive "fImage: ")
+  (let ((out (string-trim
+              (shell-command-to-string
+               (format "identify -format '%%wx%%h, %%b' %s"
+                       (shell-quote-argument (expand-file-name file)))))))
+    (message "%s — %s" (file-name-nondirectory file) out)))
+
 (provide 'image-extras)
 ;;; image-extras.el ends here

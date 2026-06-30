@@ -49,7 +49,7 @@ Without a region, falls back to the word at point."
           (read-string "Define: ")))))
   (let ((trimmed (string-trim text)))
     (when (string-empty-p trimmed) (user-error "Nothing to define"))
-    (message "Defining "%s"…"
+    (message "Defining %s…"
              (truncate-string-to-width trimmed 50 nil nil "…"))
     (gptel-request
      trimmed
